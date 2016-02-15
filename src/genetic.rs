@@ -1,12 +1,12 @@
 pub trait Genotype<G:Genotype<G> + Clone> {
-    fn fitness(&self) -> f32;
+    fn fitness(&self) -> f64;
     fn mutated(&self) -> G;
     fn create_random_population(n: usize) -> Population<G>;
 }
 
 // #[derive(Ord)]
 // pub struct PhenotypeWithFitness<G: Genotype<G>> {
-//     fitness: f32,
+//     fitness: f64,
 //     genotype: G,
 // }
 

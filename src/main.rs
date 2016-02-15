@@ -4,23 +4,131 @@ use palette::{Rgb, Lab};
 use palette::Limited;
 
 use rand::{thread_rng, Rng};
+use rand::distributions::{Normal, IndependentSample};
+use std::f64::consts::PI;
 
 mod genetic;
 use genetic::{Population, Genotype};
 
-fn distance(a: &Lab, b: &Lab) -> f32 {
+#[allow(dead_code)]
+fn euclidean_distance(a: &Lab<f64>, b: &Lab<f64>) -> f64 {
     ((a.l - b.l).powi(2) + (a.a - b.a).powi(2) + (a.b - b.b).powi(2)).sqrt()
 }
 
-pub fn term_bgcolor(color: Rgb, text: &str) -> String {
+fn ciede2000(lab1: &Lab<f64>, lab2: &Lab<f64>) -> f64 {
+    // ported from: https://github.com/THEjoezack/ColorMine/blob/master/ColorMine/ColorSpaces/Comparisons/CieDe2000Comparison.cs
+
+    let lab1l = lab1.l as f64;
+    let lab1a = lab1.a as f64;
+    let lab1b = lab1.b as f64;
+    let lab2l = lab2.l as f64;
+    let lab2a = lab2.a as f64;
+    let lab2b = lab2.b as f64;
+
+    // Set weighting factors to 1
+    let k_l = 1.0f64;
+    let k_c = 1.0f64;
+    let k_h = 1.0f64;
+
+    // Calculate Cprime1, Cprime2, Cabbar
+    let c_star_1_ab = (lab1a * lab1a + lab1b * lab1b).sqrt();
+    let c_star_2_ab = (lab2a * lab2a + lab2b * lab2b).sqrt();
+    let c_star_average_ab = (c_star_1_ab + c_star_2_ab) / 2f64;
+
+    let mut c_star_average_ab_pot7 = c_star_average_ab * c_star_average_ab * c_star_average_ab;
+    c_star_average_ab_pot7 *= c_star_average_ab_pot7 * c_star_average_ab;
+
+    let g = 0.5f64 *
+            (1f64 - (c_star_average_ab_pot7 / (c_star_average_ab_pot7 + 6103515625f64)).sqrt()); //25^7
+    let a1_prime = (1f64 + g) * lab1a;
+    let a2_prime = (1f64 + g) * lab2a;
+
+    let c_prime_1 = (a1_prime * a1_prime + lab1b * lab1b).sqrt();
+    let c_prime_2 = (a2_prime * a2_prime + lab2b * lab2b).sqrt();
+    // Angles in Degree.
+    let h_prime_1 = (((lab1b).atan2(a1_prime) * 180f64 / PI) + 360f64) % 360f64;
+    let h_prime_2 = (((lab2b).atan2(a2_prime) * 180f64 / PI) + 360f64) % 360f64;
+
+    let delta_l_prime = lab2l - lab1l;
+    let delta_c_prime = c_prime_2 - c_prime_1;
+
+    let h_bar = (h_prime_1 - h_prime_2).abs();
+    let delta_h_prime;
+    if c_prime_1 * c_prime_2 == 0f64 {
+        delta_h_prime = 0f64;
+    } else {
+        if h_bar <= 180f64 {
+            delta_h_prime = h_prime_2 - h_prime_1;
+        } else if h_bar > 180f64 && h_prime_2 <= h_prime_1 {
+            delta_h_prime = h_prime_2 - h_prime_1 + 360.0f64;
+        } else {
+            delta_h_prime = h_prime_2 - h_prime_1 - 360.0f64;
+        }
+    }
+    let delta_h_prime = 2f64 * (c_prime_1 * c_prime_2).sqrt() * (delta_h_prime * PI / 360f64).sin();
+
+    // Calculate CIEDE2000
+    let l_prime_average = (lab1l + lab2l) / 2f64;
+    let c_prime_average = (c_prime_1 + c_prime_2) / 2f64;
+
+    // Calculate h_prime_average
+
+    let h_prime_average;
+    if c_prime_1 * c_prime_2 == 0f64 {
+        h_prime_average = 0f64;
+    } else {
+        if h_bar <= 180f64 {
+            h_prime_average = (h_prime_1 + h_prime_2) / 2f64;
+        } else if h_bar > 180f64 && (h_prime_1 + h_prime_2) < 360f64 {
+            h_prime_average = (h_prime_1 + h_prime_2 + 360f64) / 2f64;
+        } else {
+            h_prime_average = (h_prime_1 + h_prime_2 - 360f64) / 2f64;
+        }
+    }
+    let mut l_prime_average_minus_50_square = l_prime_average - 50f64;
+    l_prime_average_minus_50_square *= l_prime_average_minus_50_square;
+
+    let s_l = 1f64 +
+              ((0.015f64 * l_prime_average_minus_50_square) /
+               (20f64 + l_prime_average_minus_50_square).sqrt());
+    let s_c = 1f64 + 0.045f64 * c_prime_average;
+    let t = 1f64 - 0.17f64 * ((h_prime_average - 30f64).to_radians()).cos() +
+            0.24f64 * ((h_prime_average * 2f64).to_radians()).cos() +
+            0.32f64 * ((h_prime_average * 3f64 + 6f64).to_radians()).cos() -
+            0.2f64 * ((h_prime_average * 4f64 - 63f64).to_radians()).cos();
+    let s_h = 1f64 + 0.015f64 * t * c_prime_average;
+    let mut h_prime_average_minus_275_div_25_square = (h_prime_average - 275f64) / 25f64;
+    h_prime_average_minus_275_div_25_square *= h_prime_average_minus_275_div_25_square;
+    let delta_theta = 30f64 * (-h_prime_average_minus_275_div_25_square).exp();
+
+    let mut c_prime_average_pot_7 = c_prime_average * c_prime_average * c_prime_average;
+    c_prime_average_pot_7 *= c_prime_average_pot_7 * c_prime_average;
+    let r_c = 2f64 * (c_prime_average_pot_7 / (c_prime_average_pot_7 + 6103515625f64)).sqrt();
+
+    let r_t = -((2f64 * delta_theta).to_radians()).sin() * r_c;
+
+    let delta_l_prime_div_k_l_s_l = delta_l_prime / (s_l * k_l);
+    let delta_c_prime_div_k_c_s_c = delta_c_prime / (s_c * k_c);
+    let delta_h_prime_div_k_h_s_h = delta_h_prime / (s_h * k_h);
+
+    let ciede2000 = (delta_l_prime_div_k_l_s_l * delta_l_prime_div_k_l_s_l +
+                     delta_c_prime_div_k_c_s_c * delta_c_prime_div_k_c_s_c +
+                     delta_h_prime_div_k_h_s_h * delta_h_prime_div_k_h_s_h +
+                     r_t * delta_c_prime_div_k_c_s_c * delta_h_prime_div_k_h_s_h)
+                        .sqrt();
+
+    return ciede2000 as f64;
+}
+
+pub fn term_bgcolor(color: Rgb<f64>, text: &str) -> String {
     format!("\x1b[48;2;{};{};{}m{}\x1b[0m",
-            (color.red * 255f32) as usize,
-            (color.green * 255f32) as usize,
-            (color.blue * 255f32) as usize,
+            (color.red * 255f64) as usize,
+            (color.green * 255f64) as usize,
+            (color.blue * 255f64) as usize,
             text)
 }
 
-pub fn print_color(color: &Lab) {
+pub fn print_color(color: &Lab<f64>) {
     print!("{}", term_bgcolor((*color).into(), "   "));
 }
 
@@ -28,13 +136,13 @@ pub fn print_color(color: &Lab) {
 #[derive(Debug, Clone)]
 struct ColorScheme {
     color_count: usize,
-    target_distance: f32,
-    fixed_colors: Vec<Lab>,
-    free_colors: Vec<Lab>,
+    target_distance: f64,
+    fixed_colors: Vec<Lab<f64>>,
+    free_colors: Vec<Lab<f64>>,
 }
 
 impl ColorScheme {
-    fn random(count: usize, target_distance: f32, fixed_colors: Vec<Lab>) -> ColorScheme {
+    fn random(count: usize, target_distance: f64, fixed_colors: Vec<Lab<f64>>) -> ColorScheme {
         let free_count = count as isize - fixed_colors.len() as isize;
         assert!(free_count >= 0);
 
@@ -42,9 +150,9 @@ impl ColorScheme {
 
         let mut free_colors = vec![];
         for _ in 0..free_count {
-            let rgb = Rgb::new(rng.gen_range(0f32, 1f32),
-                               rng.gen_range(0f32, 1f32),
-                               rng.gen_range(0f32, 1f32));
+            let rgb = Rgb::<f64>::new(rng.gen_range(0f64, 1f64),
+                                      rng.gen_range(0f64, 1f64),
+                                      rng.gen_range(0f64, 1f64));
             free_colors.push(rgb.into());
         }
 
@@ -70,14 +178,15 @@ impl ColorScheme {
 }
 
 impl Genotype<ColorScheme> for ColorScheme {
-    fn fitness(&self) -> f32 {
+    fn fitness(&self) -> f64 {
         let colors = self.fixed_colors.iter().chain(self.free_colors.iter());
-        let mut distances = 0f32;
+        let mut distances = 0f64;
         // for all combinations
         for (i, el1) in colors.clone().enumerate() {
             for el2 in colors.clone().skip(i + 1) {
-                let distance = distance(el1, el2);
-                let error = (1f32 + (distance - self.target_distance).abs())
+                // let distance = distance(el1, el2);
+                let distance = ciede2000(el1, el2);
+                let error = (1f64 + (distance - self.target_distance).abs())
                                 .powi(self.color_count as i32);
                 distances += error;
                 // print_color(el1);
@@ -86,30 +195,30 @@ impl Genotype<ColorScheme> for ColorScheme {
             }
         }
         let distance_count = self.color_count * (self.color_count - 1) / 2;
-        let avg_error = distances / (distance_count as f32);
+        let avg_error = distances / (distance_count as f64);
         let fitness = -avg_error;
         // println!("fitness: {}, avg error: {}\n", fitness, avg_error);
         fitness
     }
     fn mutated(&self) -> ColorScheme {
         let mut rng = thread_rng();
-        let mutation = 0.2f32;
+        let normal = Normal::new(0.0, 0.2);
         let mutated_free = self.free_colors
                                .iter()
                                .map(|color| {
-                                   let lab = Lab::new((color.l +
-                                                       rng.gen_range(-mutation, mutation))
-                                                          .max(0f32)
-                                                          .min(1f32),
-                                                      (color.a +
-                                                       rng.gen_range(-mutation, mutation))
-                                                          .max(-1f32)
-                                                          .min(1f32),
-                                                      (color.b +
-                                                       rng.gen_range(-mutation, mutation))
-                                                          .max(-1f32)
-                                                          .min(1f32));
-                                   let mut rgb: Rgb = lab.into();
+                                   let lab = Lab::<f64>::new((color.l +
+                                                              normal.ind_sample(&mut rng))
+                                                                 .max(0f64)
+                                                                 .min(1f64),
+                                                             (color.a +
+                                                              normal.ind_sample(&mut rng))
+                                                                 .max(-1f64)
+                                                                 .min(1f64),
+                                                             (color.b +
+                                                              normal.ind_sample(&mut rng))
+                                                                 .max(-1f64)
+                                                                 .min(1f64));
+                                   let mut rgb: Rgb<f64> = lab.into();
                                    rgb.clamp_self();
                                    let lab = rgb.into();
                                    lab
@@ -127,22 +236,26 @@ impl Genotype<ColorScheme> for ColorScheme {
         let mut schemes = vec![];
         for _ in 0..size {
             schemes.push(ColorScheme::random(8,
-                                             1f32,
-                                             vec![Rgb::new(0.0, 43.0 / 255.0, 54.0 / 255.0)
+                                             1.2f64,
+                                             vec![Rgb::<f64>::new(0.0,
+                                                                  43.0 / 255.0,
+                                                                  54.0 / 255.0)
                                                       .into(),
-                                                  Rgb::new(253.0 / 255.0,
-                                                           246.0 / 255.0,
-                                                           227.0 / 255.0)
-                                                      .into()]));
+                                                  Rgb::<f64>::new(253.0 / 255.0,
+                                                                  246.0 / 255.0,
+                                                                  227.0 / 255.0)
+                                                      .into(),
+                                             ]));
         }
         Population { genotypes: schemes }
     }
 }
 
 fn main() {
-    let mut p = ColorScheme::create_random_population(100);
-    for _ in 0..10000 {
+    let mut p = ColorScheme::create_random_population(10000);
+    for _ in 0..10 {
         let best = p.iterate();
         best.preview();
+        // best.fitness();
     }
 }
