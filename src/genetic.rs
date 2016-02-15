@@ -33,7 +33,7 @@ impl<G: Genotype<G> + Clone> Population<G> {
         });
         fitnesses.reverse();
 
-        let elitism = 20;
+        let elitism = 1;
         let elite = fitnesses.iter()
                              .take(elitism);
 
@@ -41,11 +41,21 @@ impl<G: Genotype<G> + Clone> Population<G> {
             let (best, _) = x.clone();
             *old = best.clone();
         }
-        for (old, x) in self.genotypes.iter_mut().skip(elitism).zip(elite.clone().cycle()) {
+        for (old, x) in self.genotypes
+                            .iter_mut()
+                            .skip(elitism)
+                            .zip(fitnesses.iter()
+                                          .take(if elitism == 0 {
+                                              1
+                                          } else {
+                                              0
+                                          })
+                                          .chain(elite.clone())
+                                          .cycle()) {
             let (best, _) = x.clone();
             *old = best.mutated();
         }
-        let (best, _) = elite.clone().nth(0).unwrap().clone();
+        let (best, _) = fitnesses.iter().nth(0).unwrap().clone();
         best
     }
 }
