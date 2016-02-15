@@ -236,7 +236,7 @@ impl Genotype<ColorScheme> for ColorScheme {
         let mut schemes = vec![];
         for _ in 0..size {
             schemes.push(ColorScheme::random(8,
-                                             1.2f64,
+                                             1.0f64,
                                              vec![Rgb::<f64>::new(0.0,
                                                                   43.0 / 255.0,
                                                                   54.0 / 255.0)
@@ -252,10 +252,10 @@ impl Genotype<ColorScheme> for ColorScheme {
 }
 
 fn main() {
-    let mut p = ColorScheme::create_random_population(10000);
-    for _ in 0..10 {
+    let mut p = ColorScheme::create_random_population(1000);
+    for _ in 0..1000 {
         let best = p.iterate();
         best.preview();
-        // best.fitness();
+        println!("best fitness: {}", best.fitness());
     }
 }
