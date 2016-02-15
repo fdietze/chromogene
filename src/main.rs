@@ -184,7 +184,7 @@ impl Genotype<ColorScheme> for ColorScheme {
         // for all combinations
         for (i, el1) in colors.clone().enumerate() {
             for el2 in colors.clone().skip(i + 1) {
-                // let distance = distance(el1, el2);
+                // let distance = euclidean_distance(el1, el2);
                 let distance = ciede2000(el1, el2);
                 let error = (1f64 + (distance - self.target_distance).abs())
                                 .powi(self.color_count as i32);
@@ -214,8 +214,8 @@ impl Genotype<ColorScheme> for ColorScheme {
                                         .powi(self.color_count as i32);
         }
 
-        let avg_luminance_error = sum_luminance_error / (self.color_count as f64) * 1.5;
-        let avg_chromacity_error = sum_chromacity_error / (self.color_count as f64) * 1.5;
+        let avg_luminance_error = sum_luminance_error / (self.color_count as f64) * 2.0;
+        let avg_chromacity_error = sum_chromacity_error / (self.color_count as f64) * 2.0;
 
 
         let fitness = -avg_distance_error - avg_luminance_error - avg_chromacity_error;
@@ -230,22 +230,22 @@ impl Genotype<ColorScheme> for ColorScheme {
         // println!("fitness: {}\n", fitness);
         fitness
     }
-    fn mutated(&self) -> ColorScheme {
+    fn mutated(&self, heat: f64) -> ColorScheme {
         let mut rng = thread_rng();
-        let normal = Normal::new(0.0, 0.01);
+        let normal = Normal::new(0.0, 0.2);
         let mutated_free = self.free_colors
                                .iter()
                                .map(|color| {
                                    let lab = Lab::<f64>::new((color.l +
-                                                              normal.ind_sample(&mut rng))
+                                                              normal.ind_sample(&mut rng) * heat)
                                                                  .max(0f64)
                                                                  .min(1f64),
                                                              (color.a +
-                                                              normal.ind_sample(&mut rng))
+                                                              normal.ind_sample(&mut rng) * heat)
                                                                  .max(-1f64)
                                                                  .min(1f64),
                                                              (color.b +
-                                                              normal.ind_sample(&mut rng))
+                                                              normal.ind_sample(&mut rng) * heat)
                                                                  .max(-1f64)
                                                                  .min(1f64));
                                    let mut rgb: Rgb<f64> = lab.into();
@@ -265,16 +265,16 @@ impl Genotype<ColorScheme> for ColorScheme {
     fn create_random_population(size: usize) -> Population<ColorScheme> {
         let mut schemes = vec![];
         for _ in 0..size {
-            schemes.push(ColorScheme::random(8,
-                                             1.1f64,
+            schemes.push(ColorScheme::random(9,
+                                             1.0f64,
                                              vec![Rgb::<f64>::new(0.0,
                                                                   43.0 / 255.0,
                                                                   54.0 / 255.0)
                                              .into(),
-                                             Rgb::<f64>::new(253.0 / 255.0,
-                                                             246.0 / 255.0,
-                                                             227.0 / 255.0)
-                                             .into(),
+                                             // Rgb::<f64>::new(253.0 / 255.0,
+                                             //                 246.0 / 255.0,
+                                             //                 227.0 / 255.0)
+                                             // .into(),
                                              ]));
         }
         Population { genotypes: schemes }
@@ -282,10 +282,18 @@ impl Genotype<ColorScheme> for ColorScheme {
 }
 
 fn main() {
-    let mut p = ColorScheme::create_random_population(1000);
-    for i in 0..100 {
-        let best = p.iterate();
+    let generations = 200;
+    let population_size = 1000;
+    let elitism = 0;
+
+    let mut p = ColorScheme::create_random_population(population_size);
+    for i in 0..generations {
+        let heat = 1.0 - i as f64 / generations as f64;
+        let best = p.iterate(heat, elitism);
         best.preview();
-        println!("{}: best fitness: {}", i, best.fitness());
+        println!("{:04}: best fitness: {:11.5}, heat: {:5.3}",
+                 i,
+                 best.fitness(),
+                 heat);
     }
 }

@@ -6,3 +6,8 @@ authors = ["Felix Dietze <felix@beerleader.net>"]
 [dependencies]
 palette = "0.2"
 rand = "0.3"
+
+# The release profile, used for `cargo build --release`
+[profile.release]
+debug = false # enable for profiling
+lto = true # does not work with debugging symbols

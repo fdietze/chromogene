@@ -2,7 +2,7 @@ use std::cmp::Ordering;
 
 pub trait Genotype<G:Genotype<G> + Clone> {
     fn fitness(&self) -> f64;
-    fn mutated(&self) -> G;
+    fn mutated(&self, heat: f64) -> G;
     fn create_random_population(n: usize) -> Population<G>;
 }
 
@@ -17,7 +17,7 @@ pub struct Population<G: Genotype<G> + Clone> {
 }
 
 impl<G: Genotype<G> + Clone> Population<G> {
-    pub fn iterate(&mut self) -> G {
+    pub fn iterate(&mut self, heat: f64, elitism: usize) -> G {
         let mut fitnesses: Vec<(G, f64)> = self.genotypes
                                                .iter()
                                                .map(|g| (g.clone(), g.fitness()))
@@ -33,7 +33,6 @@ impl<G: Genotype<G> + Clone> Population<G> {
         });
         fitnesses.reverse();
 
-        let elitism = 1;
         let elite = fitnesses.iter()
                              .take(elitism);
 
@@ -53,7 +52,7 @@ impl<G: Genotype<G> + Clone> Population<G> {
                                           .chain(elite.clone())
                                           .cycle()) {
             let (best, _) = x.clone();
-            *old = best.mutated();
+            *old = best.mutated(heat);
         }
         let (best, _) = fitnesses.iter().nth(0).unwrap().clone();
         best
