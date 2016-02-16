@@ -6,12 +6,6 @@ pub trait Genotype<G:Genotype<G> + Clone> {
     fn create_random_population(n: usize) -> Population<G>;
 }
 
-// #[derive(Ord)]
-// pub struct PhenotypeWithFitness<G: Genotype<G>> {
-//     fitness: f64,
-//     genotype: G,
-// }
-
 pub struct Population<G: Genotype<G> + Clone> {
     pub genotypes: Vec<G>,
 }

@@ -1,6 +1,6 @@
 extern crate palette;
 extern crate rand;
-use palette::{Lab, Rgb};
+use palette::{Lab, Lch, Rgb};
 use palette::Limited;
 use palette::pixel::Srgb;
 
@@ -132,16 +132,12 @@ impl ColorScheme {
                              fixed_free_dist.len() as f64;
 
         let var_free_dist = free_dist.iter()
-                                     .map(|&(_, _, dist)| {
-                                         (dist - avg_free_dist) * (dist - avg_free_dist)
-                                     })
+                                     .map(|&(_, _, dist)| (dist - avg_free_dist).powi(2))
                                      .fold(0.0, |sum, x| sum + x) /
                             free_dist.len() as f64;
 
         let var_fixed_dist = fixed_free_dist.iter()
-                                            .map(|&(_, _, dist)| {
-                                                (dist - avg_fixed_dist) * (dist - avg_fixed_dist)
-                                            })
+                                            .map(|&(_, _, dist)| (dist - avg_fixed_dist).powi(2))
                                             .fold(0.0, |sum, x| sum + x) /
                              fixed_free_dist.len() as f64;
 
@@ -153,6 +149,34 @@ impl ColorScheme {
                                             .map(|&(_, _, dist)| dist)
                                             .fold(std::f64::MAX, |min, x| min.min(x));
 
+        let avg_chroma = self.free_colors
+                             .iter()
+                             .map(|&col| {
+                                 let lch: Lch<f64> = col.into();
+                                 lch.chroma * 128.0
+                             })
+                             .fold(0.0, |sum, x| sum + x) /
+                         self.free_colors.len() as f64;
+        let var_chroma = self.free_colors
+                             .iter()
+                             .map(|&col| {
+                                 let lch: Lch<f64> = col.into();
+                                 (lch.chroma * 128.0 - avg_chroma).powi(2)
+                             })
+                             .fold(0.0, |sum, x| sum + x) /
+                         self.free_colors.len() as f64;
+
+        let avg_luminance = self.free_colors
+                                .iter()
+                                .map(|&col| col.l * 100.0)
+                                .fold(0.0, |sum, x| sum + x) /
+                            self.free_colors.len() as f64;
+        let var_luminance = self.free_colors
+                                .iter()
+                                .map(|&col| (col.l * 100.0 - avg_luminance).powi(2))
+                                .fold(0.0, |sum, x| sum + x) /
+                            self.free_colors.len() as f64;
+
         if print {
             for &coldist in fixed_free_dist.iter() {
                 print_col_dist(coldist);
@@ -163,13 +187,18 @@ impl ColorScheme {
             for &coldist in free_dist.iter() {
                 print_col_dist(coldist);
             }
-            println!("min free distance: {}", min_free_dist);
-            println!("avg free distance: {}", avg_free_dist);
-            println!("var free distance: {}", var_free_dist);
+            println!("min free distance : {}", min_free_dist);
+            println!("avg free distance : {}", avg_free_dist);
+            println!("var free distance : {}", var_free_dist);
+            println!("avg free chroma   : {}", avg_chroma);
+            println!("var free chroma   : {}", var_chroma);
+            println!("avg free luminance: {}", avg_luminance);
+            println!("var free luminance: {}", var_luminance);
         }
 
         // fitness
-        -var_fixed_dist.powi(2) + min_free_dist.powi(3) - var_free_dist
+        -var_fixed_dist.powi(2) + min_free_dist.powi(3) - var_free_dist - var_chroma.powi(2) -
+        var_luminance.powi(2)
     }
 }
 
@@ -228,18 +257,21 @@ impl Genotype<ColorScheme> for ColorScheme {
 }
 
 fn main() {
-    let generations = 100;
+    let generations = 200;
     let population_size = 1000;
     let elitism = 0;
 
     let mut p = ColorScheme::create_random_population(population_size);
+    let mut latest: Option<ColorScheme> = None;
     for i in 0..generations {
         let heat = 1.0 - i as f64 / generations as f64;
         let best = p.iterate(heat, elitism);
         best.preview();
         println!("{:04}: best fitness: {:11.5}, heat: {:5.3}\n",
                  i,
-                 best.fitness_print(true),
+                 best.fitness_print(false),
                  heat);
+        latest = Some(best);
     }
+    latest.unwrap().fitness_print(true);
 }
