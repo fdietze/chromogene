@@ -11,16 +11,17 @@ mod genetic;
 use genetic::{Population, Genotype};
 
 mod color;
+#[allow(unused_imports)]
 use color::{ciede2000, euclidean_distance};
 
 pub fn term_bgcolor(color: Srgb<f64>, text: &str) -> String {
     // format!("\x1b[48;2;{red};{green};{blue}m{text}\x1b[0m(RGB({red:3} {green:3} {blue:3}))",
     format!("\x1b[48;2;{red};{green};{blue}m{text}\x1b[0m",
-    red = (color.red * 255f64) as usize,
-    green = (color.green * 255f64) as usize,
-    blue = (color.blue * 255f64) as usize,
-    text = text,
-    )
+            red = (color.red * 255f64) as usize,
+            green = (color.green * 255f64) as usize,
+            blue = (color.blue * 255f64) as usize,
+            text = text,
+            )
 }
 
 pub fn print_color(color: &Lab<f64>) {
@@ -28,6 +29,20 @@ pub fn print_color(color: &Lab<f64>) {
     rgb.clamp_self();
     let color = Srgb::from_linear(rgb);
     print!("{}", term_bgcolor(color, "   "));
+}
+
+fn print_col_dist(coldist: (&Lab<f64>, &Lab<f64>, f64)) {
+    let (col1, col2, dist) = coldist;
+    print_color(col1);
+    print_color(col2);
+    println!(" distance: {:5.2} Lab({:3.0} {:3.0} {:3.0}) Lab({:3.0} {:3.0} {:3.0})",
+             dist,
+             col1.l * 100.0,
+             col1.a * 128.0,
+             col1.b * 128.0,
+             col2.l * 100.0,
+             col2.a * 128.0,
+             col2.b * 128.0);
 }
 
 
@@ -72,90 +87,89 @@ impl ColorScheme {
         println!("");
     }
     fn fitness_print(&self, print: bool) -> f64 {
-        // let target_distance = 30f64;
-        let colors = self.fixed_colors.iter().chain(self.free_colors.iter());
-        // let mut sum_distance_error = 0f64;
-        // for all combinations
-        let mut min_dist = std::f64::MAX;
-        let mut sum_dist = 0f64;
-        for (i, el1) in colors.clone().enumerate() {
-            for el2 in colors.clone().skip(i + 1) {
-                // let distance = euclidean_distance(el1, el2);
-                let distance = ciede2000(el1, el2);
-                if distance < min_dist {
-                    min_dist = distance;
-                }
-                sum_dist += distance;
+        fn distance(col1: &Lab<f64>, col2: &Lab<f64>) -> f64 {
+            // euclidean_distance(col1, col2)
+            ciede2000(col1, col2)
+        };
 
-                if print {
-                    print_color(el1);
-                    print_color(el2);
-                    println!(" distance: {:5.2} Lab({:3.0} {:3.0} {:3.0}) Lab({:3.0} {:3.0} \
-                              {:3.0})",
-                             distance,
-                             el1.l * 100.0,
-                             el1.a * 128.0,
-                             el1.b * 128.0,
-                             el2.l * 100.0,
-                             el2.a * 128.0,
-                             el2.b * 128.0);
-                }
-            }
-        }
+        let fixed_free_dist: Vec<(&Lab<f64>, &Lab<f64>, f64)> = self.fixed_colors
+                                                                    .iter()
+                                                                    .flat_map(|col1| {
+                                                                        self.free_colors
+                                                                            .iter()
+                                                                            .map(move |col2| {
+                                                                                (col1,
+                                                                                 col2,
+                                                                                 distance(col1,
+                                                                                          col2))
+                                                                            })
+                                                                    })
+                                                                    .collect();
 
-        let distance_count = self.color_count * (self.color_count - 1) / 2;
-        let avg_dist = sum_dist / distance_count as f64;
+        let free_dist: Vec<(&Lab<f64>, &Lab<f64>, f64)> = self.free_colors
+                                                              .iter()
+                                                              .enumerate()
+                                                              .flat_map(|(i, col1)| {
+                                                                  self.free_colors
+                                                                      .iter()
+                                                                      .skip(i + 1)
+                                                                      .map(move |col2| {
+                                                                          (col1,
+                                                                           col2,
+                                                                           distance(col1, col2))
+                                                                      })
+                                                              })
+                                                              .collect();
 
-        let mut var_dist = 0f64;
-        for (i, el1) in colors.clone().enumerate() {
-            for el2 in colors.clone().skip(i + 1) {
-                // let distance = euclidean_distance(el1, el2);
-                let distance = ciede2000(el1, el2);
-                var_dist += (distance - avg_dist) * (distance - avg_dist);
-            }
-        }
-        var_dist /= distance_count as f64;
+        let avg_free_dist = free_dist.iter()
+                                     .map(|&(_, _, dist)| dist)
+                                     .fold(0.0, |sum, x| sum + x) /
+                            free_dist.len() as f64;
 
+        let avg_fixed_dist = fixed_free_dist.iter()
+                                            .map(|&(_, _, dist)| dist)
+                                            .fold(0.0, |sum, x| sum + x) /
+                             fixed_free_dist.len() as f64;
+
+        let var_free_dist = free_dist.iter()
+                                     .map(|&(_, _, dist)| {
+                                         (dist - avg_free_dist) * (dist - avg_free_dist)
+                                     })
+                                     .fold(0.0, |sum, x| sum + x) /
+                            free_dist.len() as f64;
+
+        let var_fixed_dist = fixed_free_dist.iter()
+                                            .map(|&(_, _, dist)| {
+                                                (dist - avg_fixed_dist) * (dist - avg_fixed_dist)
+                                            })
+                                            .fold(0.0, |sum, x| sum + x) /
+                             fixed_free_dist.len() as f64;
+
+        let min_free_dist = free_dist.iter()
+                                     .map(|&(_, _, dist)| dist)
+                                     .fold(std::f64::MAX, |min, x| min.min(x));
+
+        let min_fixed_dist = fixed_free_dist.iter()
+                                            .map(|&(_, _, dist)| dist)
+                                            .fold(std::f64::MAX, |min, x| min.min(x));
 
         if print {
-            println!("min distance: {}", min_dist);
-            println!("avg distance: {}", avg_dist);
-            println!("var distance: {}", var_dist);
-            println!("sum distance: {}", sum_dist);
+            for &coldist in fixed_free_dist.iter() {
+                print_col_dist(coldist);
+            }
+            println!("min fixed distance: {}", min_fixed_dist);
+            println!("avg fixed distance: {}", avg_fixed_dist);
+            println!("var fixed distance: {}", var_fixed_dist);
+            for &coldist in free_dist.iter() {
+                print_col_dist(coldist);
+            }
+            println!("min free distance: {}", min_free_dist);
+            println!("avg free distance: {}", avg_free_dist);
+            println!("var free distance: {}", var_free_dist);
         }
-        // let avg_distance_error = sum_distance_error / (distance_count as f64);
 
-
-        // let mut sum_luminance_error = 0f64;
-        // let mut sum_chromacity_error = 0f64;
-        // let avg_luminance = colors.clone().fold(0f64, |sum, c| sum + c.l) / self.color_count as f64;
-        // let avg_chromacity = colors.clone()
-        //                            .fold(0f64, |sum, c| sum + (c.a * c.a + c.b * c.b).sqrt()) /
-        //                      self.color_count as f64;
-        // for color in colors.clone() {
-        //     sum_luminance_error += (1f64 + (avg_luminance - color.l).abs())
-        //                                .powi(self.color_count as i32);
-        //     sum_chromacity_error += (1f64 +
-        //                              (avg_chromacity -
-        //                               (color.a * color.a + color.b * color.b).sqrt())
-        //                                  .abs())
-        //                                 .powi(self.color_count as i32);
-        // }
-
-        // let avg_luminance_error = sum_luminance_error / (self.color_count as f64) * 2.0;
-        // let avg_chromacity_error = sum_chromacity_error / (self.color_count as f64) * 200.0;
-
-
-        let fitness = min_dist * min_dist - var_dist;
-        // println!("avg luminance: {}, avg chromacity: {}",
-        //          avg_luminance,
-        //          avg_chromacity);
-        // println!("avg distance error: {}\navg luminance error: {}\navg chromacity error: {}",
-        //          avg_distance_error,
-        //          avg_luminance_error,
-        //          avg_chromacity_error,
-        //          );
-        fitness
+        // fitness
+        -var_fixed_dist.powi(2) + min_free_dist.powi(3) - var_free_dist
     }
 }
 
@@ -200,12 +214,12 @@ impl Genotype<ColorScheme> for ColorScheme {
             schemes.push(ColorScheme::random(10,
                                              vec![
                                              Srgb::<f64>::new(0.0,
-                                                                  43.0 / 255.0,
-                                                                  54.0 / 255.0)
+                                                              43.0 / 255.0,
+                                                              54.0 / 255.0)
                                              .to_linear().into(),
                                              Srgb::<f64>::new(253.0 / 255.0,
-                                                             246.0 / 255.0,
-                                                             227.0 / 255.0)
+                                                              246.0 / 255.0,
+                                                              227.0 / 255.0)
                                              .to_linear().into(),
                                              ]));
         }
@@ -223,9 +237,9 @@ fn main() {
         let heat = 1.0 - i as f64 / generations as f64;
         let best = p.iterate(heat, elitism);
         best.preview();
-        println!("{:04}: best fitness: {:11.5}, heat: {:5.3}",
+        println!("{:04}: best fitness: {:11.5}, heat: {:5.3}\n",
                  i,
-                 best.fitness_print(false),
+                 best.fitness_print(true),
                  heat);
     }
 }
