@@ -8,6 +8,7 @@ pub fn euclidean_distance(a: &Lab<f64>, b: &Lab<f64>) -> f64 {
 }
 
 // TODO: http://www.brucelindbloom.com/index.html?Eqn_DeltaE_CMC.html
+// http://colormine.org/delta-e-calculator/cmc
 
 pub fn ciede2000(lab1: &Lab<f64>, lab2: &Lab<f64>) -> f64 {
     // ported from: https://github.com/THEjoezack/ColorMine/blob/master/ColorMine/ColorSpaces/Comparisons/CieDe2000Comparison.cs

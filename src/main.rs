@@ -1,7 +1,8 @@
 extern crate palette;
 extern crate rand;
-use palette::{Rgb, Lab};
+use palette::{Lab, Rgb};
 use palette::Limited;
+use palette::pixel::Srgb;
 
 use rand::{thread_rng, Rng};
 use rand::distributions::{Normal, IndependentSample};
@@ -12,18 +13,20 @@ use genetic::{Population, Genotype};
 mod color;
 use color::{ciede2000, euclidean_distance};
 
-pub fn term_bgcolor(color: Rgb<f64>, text: &str) -> String {
-    format!("\x1b[48;2;{};{};{}m{}\x1b[0m",
-            (color.red * 255f64) as usize,
-            (color.green * 255f64) as usize,
-            (color.blue * 255f64) as usize,
-            text)
+pub fn term_bgcolor(color: Srgb<f64>, text: &str) -> String {
+    // format!("\x1b[48;2;{red};{green};{blue}m{text}\x1b[0m(RGB({red:3} {green:3} {blue:3}))",
+    format!("\x1b[48;2;{red};{green};{blue}m{text}\x1b[0m",
+    red = (color.red * 255f64) as usize,
+    green = (color.green * 255f64) as usize,
+    blue = (color.blue * 255f64) as usize,
+    text = text,
+    )
 }
 
 pub fn print_color(color: &Lab<f64>) {
     let mut rgb: Rgb<f64> = (*color).into();
     rgb.clamp_self();
-    let color = rgb.into();
+    let color = Srgb::from_linear(rgb);
     print!("{}", term_bgcolor(color, "   "));
 }
 
@@ -87,7 +90,8 @@ impl ColorScheme {
                 if print {
                     print_color(el1);
                     print_color(el2);
-                    println!(" distance: {:5.2} -- {:3.0} {:3.0} {:3.0} || {:3.0} {:3.0} {:3.0}:",
+                    println!(" distance: {:5.2} Lab({:3.0} {:3.0} {:3.0}) Lab({:3.0} {:3.0} \
+                              {:3.0})",
                              distance,
                              el1.l * 100.0,
                              el1.a * 128.0,
@@ -142,7 +146,7 @@ impl ColorScheme {
         // let avg_chromacity_error = sum_chromacity_error / (self.color_count as f64) * 200.0;
 
 
-        let fitness = min_dist + avg_dist - var_dist;
+        let fitness = min_dist * min_dist - var_dist;
         // println!("avg luminance: {}, avg chromacity: {}",
         //          avg_luminance,
         //          avg_chromacity);
@@ -195,14 +199,14 @@ impl Genotype<ColorScheme> for ColorScheme {
         for _ in 0..size {
             schemes.push(ColorScheme::random(10,
                                              vec![
-                                             Rgb::<f64>::new(0.0,
+                                             Srgb::<f64>::new(0.0,
                                                                   43.0 / 255.0,
                                                                   54.0 / 255.0)
-                                             .into(),
-                                             Rgb::<f64>::new(253.0 / 255.0,
+                                             .to_linear().into(),
+                                             Srgb::<f64>::new(253.0 / 255.0,
                                                              246.0 / 255.0,
                                                              227.0 / 255.0)
-                                             .into(),
+                                             .to_linear().into(),
                                              ]));
         }
         Population { genotypes: schemes }
