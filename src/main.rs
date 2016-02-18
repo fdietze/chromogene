@@ -24,11 +24,31 @@ pub fn term_bgcolor(color: Srgb<f64>, text: &str) -> String {
             )
 }
 
+pub fn term_fgcolor(color: Srgb<f64>, text: &str) -> String {
+    // format!("\x1b[48;2;{red};{green};{blue}m{text}\x1b[0m(RGB({red:3} {green:3} {blue:3}))",
+    format!("\x1b[38;2;{red};{green};{blue}m{text}\x1b[0m",
+            red = (color.red * 255f64) as usize,
+            green = (color.green * 255f64) as usize,
+            blue = (color.blue * 255f64) as usize,
+            text = text,
+            )
+}
+
 pub fn print_color(color: &Lab<f64>) {
     let mut rgb: Rgb<f64> = (*color).into();
     rgb.clamp_self();
     let color = Srgb::from_linear(rgb);
     print!("{}", term_bgcolor(color, "   "));
+}
+
+pub fn print_colored_text(bg: &Lab<f64>, fg: &Lab<f64>, text: &str) {
+    let mut rgb_bg: Rgb<f64> = (*bg).into();
+    rgb_bg.clamp_self();
+    let bg = Srgb::from_linear(rgb_bg);
+    let mut rgb_fg: Rgb<f64> = (*fg).into();
+    rgb_fg.clamp_self();
+    let fg = Srgb::from_linear(rgb_fg);
+    print!("{}", term_bgcolor(bg, &term_fgcolor(fg, text)));
 }
 
 fn print_col_dist(coldist: (&Lab<f64>, &Lab<f64>, f64)) {
@@ -81,8 +101,21 @@ impl ColorScheme {
             print_color(color);
         }
         println!("");
-        for color in self.free_colors.iter() {
+        let mut sorted = self.free_colors.clone();
+        sorted.sort_by_key(|&col| {
+            let lch: Lch<f64> = col.into();
+            (lch.hue.to_positive_degrees() * 100.0) as usize + (lch.l * 1000.0) as usize
+        });
+        for color in sorted.iter() {
             print_color(color);
+        }
+
+        println!("");
+        for bg in self.fixed_colors.iter() {
+            for fg in self.free_colors.iter() {
+                print_colored_text(bg, fg, "delgmpgl ");
+            }
+            println!("");
         }
         println!("");
     }
@@ -181,24 +214,23 @@ impl ColorScheme {
             for &coldist in fixed_free_dist.iter() {
                 print_col_dist(coldist);
             }
-            println!("min fixed distance: {}", min_fixed_dist);
-            println!("avg fixed distance: {}", avg_fixed_dist);
-            println!("var fixed distance: {}", var_fixed_dist);
+            println!("min fixed distance: {:7.2}", min_fixed_dist);
+            println!("avg fixed distance: {:7.2}", avg_fixed_dist);
+            println!("var fixed distance: {:7.2}", var_fixed_dist);
             for &coldist in free_dist.iter() {
                 print_col_dist(coldist);
             }
-            println!("min free distance : {}", min_free_dist);
-            println!("avg free distance : {}", avg_free_dist);
-            println!("var free distance : {}", var_free_dist);
-            println!("avg free chroma   : {}", avg_chroma);
-            println!("var free chroma   : {}", var_chroma);
-            println!("avg free luminance: {}", avg_luminance);
-            println!("var free luminance: {}", var_luminance);
+            println!("min free distance : {:7.2}", min_free_dist);
+            println!("avg free distance : {:7.2}", avg_free_dist);
+            println!("var free distance : {:7.2}", var_free_dist);
+            println!("avg free chroma   : {:7.2}", avg_chroma);
+            println!("var free chroma   : {:7.2}", var_chroma);
+            println!("avg free luminance: {:7.2}", avg_luminance);
+            println!("var free luminance: {:7.2}", var_luminance);
         }
 
         // fitness
-        -var_fixed_dist.powi(2) + min_free_dist.powi(3) - var_free_dist - var_chroma.powi(2) -
-        var_luminance.powi(2)
+        -var_fixed_dist * 2.0 - var_luminance.powi(2) - var_chroma + min_free_dist.powi(2)
     }
 }
 
@@ -208,7 +240,7 @@ impl Genotype<ColorScheme> for ColorScheme {
     }
     fn mutated(&self, heat: f64) -> ColorScheme {
         let mut rng = thread_rng();
-        let normal = Normal::new(0.0, 0.2);
+        let normal = Normal::new(0.0, 0.15);
         let mutated_free = self.free_colors
                                .iter()
                                .map(|color| {
@@ -264,7 +296,7 @@ fn main() {
     let mut p = ColorScheme::create_random_population(population_size);
     let mut latest: Option<ColorScheme> = None;
     for i in 0..generations {
-        let heat = 1.0 - i as f64 / generations as f64;
+        let heat = (1.0 - i as f64 / generations as f64).powi(2);
         let best = p.iterate(heat, elitism);
         best.preview();
         println!("{:04}: best fitness: {:11.5}, heat: {:5.3}\n",
