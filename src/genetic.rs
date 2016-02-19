@@ -27,27 +27,28 @@ impl<G: Genotype<G> + Clone> Population<G> {
         });
         fitnesses.reverse();
 
-        let elite = fitnesses.iter()
-                             .take(elitism);
 
-        for (old, x) in self.genotypes.iter_mut().zip(elite.clone()) {
-            let (best, _) = x.clone();
-            *old = best.clone();
+        // normalization
+        let &(_, max_fitness) = fitnesses.first().unwrap();
+        let &(_, min_fitness) = fitnesses.last().unwrap();
+        let interval = max_fitness - min_fitness;
+        // sum of all shifted values
+        let sum = fitnesses.iter().fold(0.0, |sum, &(_, x)| sum + x - min_fitness);
+
+        let probs: Vec<f64> = fitnesses.iter()
+                                       .map(|&(_, fitness)| (fitness - min_fitness) / sum)
+                                       .collect();
+        // (sum of all probabilities == 1)
+
+        for genotype in self.genotypes.iter_mut() {
+            // let parent_a = random_parent();
+            // let parent_b = random_parent();
+            // let crossed = parent_a.cross(parent_b);
+            // let mutated = cross.mutated();
+            // *genotype = mutated;
         }
-        for (old, x) in self.genotypes
-                            .iter_mut()
-                            .skip(elitism)
-                            .zip(fitnesses.iter()
-                                          .take(if elitism == 0 {
-                                              1
-                                          } else {
-                                              0
-                                          })
-                                          .chain(elite.clone())
-                                          .cycle()) {
-            let (best, _) = x.clone();
-            *old = best.mutated(heat);
-        }
+
+
         let (best, _) = fitnesses.iter().nth(0).unwrap().clone();
         best
     }

@@ -14,6 +14,13 @@ mod color;
 #[allow(unused_imports)]
 use color::{ciede2000, euclidean_distance};
 
+fn srgb(r: usize, g: usize, b: usize) -> Lab<f64> {
+    Srgb::<f64>::new(r as f64 / 255.0, g as f64 / 255.0, b as f64 / 255.0)
+        .to_linear()
+        .into()
+}
+
+
 pub fn term_bgcolor(color: Srgb<f64>, text: &str) -> String {
     // format!("\x1b[48;2;{red};{green};{blue}m{text}\x1b[0m(RGB({red:3} {green:3} {blue:3}))",
     format!("\x1b[48;2;{red};{green};{blue}m{text}\x1b[0m",
@@ -85,6 +92,7 @@ impl ColorScheme {
             let rgb = Rgb::<f64>::new(rng.gen_range(0f64, 1f64),
                                       rng.gen_range(0f64, 1f64),
                                       rng.gen_range(0f64, 1f64));
+            // TODO: colorblind transformation
             free_colors.push(rgb.into());
         }
 
@@ -120,6 +128,7 @@ impl ColorScheme {
         println!("");
     }
     fn fitness_print(&self, print: bool) -> f64 {
+        // fn convert_to_desired
         fn distance(col1: &Lab<f64>, col2: &Lab<f64>) -> f64 {
             // euclidean_distance(col1, col2)
             ciede2000(col1, col2)
@@ -240,20 +249,23 @@ impl Genotype<ColorScheme> for ColorScheme {
     }
     fn mutated(&self, heat: f64) -> ColorScheme {
         let mut rng = thread_rng();
-        let normal = Normal::new(0.0, 0.15);
+        let distribution = Normal::new(0.0, 0.15);
         let mutated_free = self.free_colors
                                .iter()
                                .map(|color| {
                                    let lab = Lab::<f64>::new((color.l +
-                                                              normal.ind_sample(&mut rng) * heat)
+                                                              distribution.ind_sample(&mut rng) *
+                                                              heat)
                                                                  .max(0f64)
                                                                  .min(1f64),
                                                              (color.a +
-                                                              normal.ind_sample(&mut rng) * heat)
+                                                              distribution.ind_sample(&mut rng) *
+                                                              heat)
                                                                  .max(-1f64)
                                                                  .min(1f64),
                                                              (color.b +
-                                                              normal.ind_sample(&mut rng) * heat)
+                                                              distribution.ind_sample(&mut rng) *
+                                                              heat)
                                                                  .max(-1f64)
                                                                  .min(1f64));
                                    let mut rgb: Rgb<f64> = lab.into();
@@ -270,27 +282,19 @@ impl Genotype<ColorScheme> for ColorScheme {
     }
 
     fn create_random_population(size: usize) -> Population<ColorScheme> {
-        let mut schemes = vec![];
-        for _ in 0..size {
-            schemes.push(ColorScheme::random(10,
-                                             vec![
-                                             Srgb::<f64>::new(0.0,
-                                                              43.0 / 255.0,
-                                                              54.0 / 255.0)
-                                             .to_linear().into(),
-                                             Srgb::<f64>::new(253.0 / 255.0,
-                                                              246.0 / 255.0,
-                                                              227.0 / 255.0)
-                                             .to_linear().into(),
-                                             ]));
-        }
+        let fixed = vec![srgb(0, 43, 54), srgb(253, 246, 227)];
+        let total = 10;
+
+        let schemes = (0..size)
+                          .map(|_| ColorScheme::random(total, fixed.clone()))
+                          .collect();
         Population { genotypes: schemes }
     }
 }
 
 fn main() {
-    let generations = 200;
-    let population_size = 1000;
+    let generations = 100;
+    let population_size = 100;
     let elitism = 0;
 
     let mut p = ColorScheme::create_random_population(population_size);
@@ -305,5 +309,5 @@ fn main() {
                  heat);
         latest = Some(best);
     }
-    latest.unwrap().fitness_print(true);
+    // latest.unwrap().fitness_print(true);
 }
