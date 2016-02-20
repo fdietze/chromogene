@@ -104,6 +104,7 @@ impl ColorScheme {
         }
     }
 
+
     pub fn preview(&self) {
         for color in self.fixed_colors.iter() {
             print_color(color);
@@ -281,6 +282,27 @@ impl Genotype<ColorScheme> for ColorScheme {
         }
     }
 
+    fn crossover(&self, other: &ColorScheme) -> ColorScheme {
+        let mut rng = thread_rng();
+        let free = self.free_colors
+                       .iter()
+                       .zip(other.free_colors.iter())
+                       .map(|(a, b)| {
+                           if rng.gen::<bool>() {
+                               *a
+                           } else {
+                               *b
+                           }
+                       })
+                       .collect();
+
+        ColorScheme {
+            color_count: self.color_count,
+            fixed_colors: self.fixed_colors.clone(),
+            free_colors: free,
+        }
+    }
+
     fn create_random_population(size: usize) -> Population<ColorScheme> {
         let fixed = vec![srgb(0, 43, 54), srgb(253, 246, 227)];
         let total = 10;
@@ -288,19 +310,22 @@ impl Genotype<ColorScheme> for ColorScheme {
         let schemes = (0..size)
                           .map(|_| ColorScheme::random(total, fixed.clone()))
                           .collect();
-        Population { genotypes: schemes }
+        Population {
+            genotypes: schemes,
+            mutation_index: 0.25,
+        }
     }
 }
 
 fn main() {
-    let generations = 100;
-    let population_size = 100;
+    let generations = 10000;
+    let population_size = 1000;
     let elitism = 0;
 
     let mut p = ColorScheme::create_random_population(population_size);
     let mut latest: Option<ColorScheme> = None;
     for i in 0..generations {
-        let heat = (1.0 - i as f64 / generations as f64).powi(2);
+        let heat = 0.04;//(1.0 - i as f64 / generations as f64).powi(2);
         let best = p.iterate(heat, elitism);
         best.preview();
         println!("{:04}: best fitness: {:11.5}, heat: {:5.3}\n",
