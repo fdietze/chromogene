@@ -1,10 +1,10 @@
 use palette::{Lab, Rgb};
 use palette::pixel::Srgb;
 use palette::Limited;
-use std::f64::consts::PI;
+use std::f32::consts::PI;
 
 #[allow(dead_code)]
-pub fn euclidean_distance(a: &Lab<f64>, b: &Lab<f64>) -> f64 {
+pub fn euclidean_distance(a: &Lab, b: &Lab) -> f32 {
     (((a.l - b.l) * 100.0).powi(2) + ((a.a - b.a) * 128.0).powi(2) + ((a.b - b.b) * 128.0).powi(2))
         .sqrt()
 }
@@ -12,51 +12,51 @@ pub fn euclidean_distance(a: &Lab<f64>, b: &Lab<f64>) -> f64 {
 macro_rules! srgb {
     ( $r:expr,$g:expr, $b:expr ) => {
         {
-    Srgb::<f64>::new($r as f64 / 255.0, $g as f64 / 255.0, $b as f64 / 255.0)
+    Srgb::new($r as f32 / 255.0, $g as f32 / 255.0, $b as f32 / 255.0)
         .to_linear()
         .into()
         }
     };
 }
 
-pub fn term_bgcolor(color: Srgb<f64>, text: &str) -> String {
+pub fn term_bgcolor(color: Srgb, text: &str) -> String {
     // format!("\x1b[48;2;{red};{green};{blue}m{text}\x1b[0m(RGB({red:3} {green:3} {blue:3}))",
     format!("\x1b[48;2;{red};{green};{blue}m{text}\x1b[0m",
-            red = (color.red * 255f64) as usize,
-            green = (color.green * 255f64) as usize,
-            blue = (color.blue * 255f64) as usize,
+            red = (color.red * 255.0) as usize,
+            green = (color.green * 255.0) as usize,
+            blue = (color.blue * 255.0) as usize,
             text = text,
             )
 }
 
-pub fn term_fgcolor(color: Srgb<f64>, text: &str) -> String {
+pub fn term_fgcolor(color: Srgb, text: &str) -> String {
     // format!("\x1b[48;2;{red};{green};{blue}m{text}\x1b[0m(RGB({red:3} {green:3} {blue:3}))",
     format!("\x1b[38;2;{red};{green};{blue}m{text}\x1b[0m",
-            red = (color.red * 255f64) as usize,
-            green = (color.green * 255f64) as usize,
-            blue = (color.blue * 255f64) as usize,
+            red = (color.red * 255.0) as usize,
+            green = (color.green * 255.0) as usize,
+            blue = (color.blue * 255.0) as usize,
             text = text,
             )
 }
 
-pub fn print_color(color: &Lab<f64>) {
-    let mut rgb: Rgb<f64> = (*color).into();
+pub fn print_color(color: &Lab) {
+    let mut rgb: Rgb = (*color).into();
     rgb.clamp_self();
     let color = Srgb::from_linear(rgb);
     print!("{}", term_bgcolor(color, "   "));
 }
 
-pub fn print_colored_text(bg: &Lab<f64>, fg: &Lab<f64>, text: &str) {
-    let mut rgb_bg: Rgb<f64> = (*bg).into();
+pub fn print_colored_text(bg: &Lab, fg: &Lab, text: &str) {
+    let mut rgb_bg: Rgb = (*bg).into();
     rgb_bg.clamp_self();
     let bg = Srgb::from_linear(rgb_bg);
-    let mut rgb_fg: Rgb<f64> = (*fg).into();
+    let mut rgb_fg: Rgb = (*fg).into();
     rgb_fg.clamp_self();
     let fg = Srgb::from_linear(rgb_fg);
     print!("{}", term_bgcolor(bg, &term_fgcolor(fg, text)));
 }
 
-pub fn print_col_dist(coldist: (&Lab<f64>, &Lab<f64>, f64)) {
+pub fn print_col_dist(coldist: (&Lab, &Lab, f32)) {
     let (col1, col2, dist) = coldist;
     print_color(col1);
     print_color(col2);
@@ -73,97 +73,96 @@ pub fn print_col_dist(coldist: (&Lab<f64>, &Lab<f64>, f64)) {
 // TODO: http://www.brucelindbloom.com/index.html?Eqn_DeltaE_CMC.html
 // http://colormine.org/delta-e-calculator/cmc
 
-pub fn ciede2000(lab1: &Lab<f64>, lab2: &Lab<f64>) -> f64 {
+pub fn ciede2000(lab1: &Lab, lab2: &Lab) -> f32 {
     // ported from: https://github.com/THEjoezack/ColorMine/blob/master/ColorMine/ColorSpaces/Comparisons/CieDe2000Comparison.cs
 
-    let lab1l = lab1.l as f64 * 100.0;
-    let lab1a = lab1.a as f64 * 128.0;
-    let lab1b = lab1.b as f64 * 128.0;
-    let lab2l = lab2.l as f64 * 100.0;
-    let lab2a = lab2.a as f64 * 128.0;
-    let lab2b = lab2.b as f64 * 128.0;
+    let lab1l = lab1.l * 100.0;
+    let lab1a = lab1.a * 128.0;
+    let lab1b = lab1.b * 128.0;
+    let lab2l = lab2.l * 100.0;
+    let lab2a = lab2.a * 128.0;
+    let lab2b = lab2.b * 128.0;
 
     // Set weighting factors to 1
-    let k_l = 1.0f64;
-    let k_c = 1.0f64;
-    let k_h = 1.0f64;
+    let k_l = 1.0;
+    let k_c = 1.0;
+    let k_h = 1.0;
 
     // Calculate Cprime1, Cprime2, Cabbar
     let c_star_1_ab = (lab1a * lab1a + lab1b * lab1b).sqrt();
     let c_star_2_ab = (lab2a * lab2a + lab2b * lab2b).sqrt();
-    let c_star_average_ab = (c_star_1_ab + c_star_2_ab) / 2f64;
+    let c_star_average_ab = (c_star_1_ab + c_star_2_ab) / 2.0;
 
     let mut c_star_average_ab_pot7 = c_star_average_ab * c_star_average_ab * c_star_average_ab;
     c_star_average_ab_pot7 *= c_star_average_ab_pot7 * c_star_average_ab;
 
-    let g = 0.5f64 *
-            (1f64 - (c_star_average_ab_pot7 / (c_star_average_ab_pot7 + 6103515625f64)).sqrt()); //25^7
-    let a1_prime = (1f64 + g) * lab1a;
-    let a2_prime = (1f64 + g) * lab2a;
+    let g = 0.5 * (1.0 - (c_star_average_ab_pot7 / (c_star_average_ab_pot7 + 6103515625.0)).sqrt()); //25^7
+    let a1_prime = (1.0 + g) * lab1a;
+    let a2_prime = (1.0 + g) * lab2a;
 
     let c_prime_1 = (a1_prime * a1_prime + lab1b * lab1b).sqrt();
     let c_prime_2 = (a2_prime * a2_prime + lab2b * lab2b).sqrt();
     // Angles in Degree.
-    let h_prime_1 = (((lab1b).atan2(a1_prime) * 180f64 / PI) + 360f64) % 360f64;
-    let h_prime_2 = (((lab2b).atan2(a2_prime) * 180f64 / PI) + 360f64) % 360f64;
+    let h_prime_1 = (((lab1b).atan2(a1_prime) * 180.0 / PI) + 360.0) % 360.0;
+    let h_prime_2 = (((lab2b).atan2(a2_prime) * 180.0 / PI) + 360.0) % 360.0;
 
     let delta_l_prime = lab2l - lab1l;
     let delta_c_prime = c_prime_2 - c_prime_1;
 
     let h_bar = (h_prime_1 - h_prime_2).abs();
     let delta_h_prime;
-    if c_prime_1 * c_prime_2 == 0f64 {
-        delta_h_prime = 0f64;
+    if c_prime_1 * c_prime_2 == 0.0 {
+        delta_h_prime = 0.0;
     } else {
-        if h_bar <= 180f64 {
+        if h_bar <= 180.0 {
             delta_h_prime = h_prime_2 - h_prime_1;
-        } else if h_bar > 180f64 && h_prime_2 <= h_prime_1 {
-            delta_h_prime = h_prime_2 - h_prime_1 + 360.0f64;
+        } else if h_bar > 180.0 && h_prime_2 <= h_prime_1 {
+            delta_h_prime = h_prime_2 - h_prime_1 + 360.0;
         } else {
-            delta_h_prime = h_prime_2 - h_prime_1 - 360.0f64;
+            delta_h_prime = h_prime_2 - h_prime_1 - 360.0;
         }
     }
-    let delta_h_prime = 2f64 * (c_prime_1 * c_prime_2).sqrt() * (delta_h_prime * PI / 360f64).sin();
+    let delta_h_prime = 2.0 * (c_prime_1 * c_prime_2).sqrt() * (delta_h_prime * PI / 360.0).sin();
 
     // Calculate CIEDE2000
-    let l_prime_average = (lab1l + lab2l) / 2f64;
-    let c_prime_average = (c_prime_1 + c_prime_2) / 2f64;
+    let l_prime_average = (lab1l + lab2l) / 2.0;
+    let c_prime_average = (c_prime_1 + c_prime_2) / 2.0;
 
     // Calculate h_prime_average
 
     let h_prime_average;
-    if c_prime_1 * c_prime_2 == 0f64 {
-        h_prime_average = 0f64;
+    if c_prime_1 * c_prime_2 == 0.0 {
+        h_prime_average = 0.0;
     } else {
-        if h_bar <= 180f64 {
-            h_prime_average = (h_prime_1 + h_prime_2) / 2f64;
-        } else if h_bar > 180f64 && (h_prime_1 + h_prime_2) < 360f64 {
-            h_prime_average = (h_prime_1 + h_prime_2 + 360f64) / 2f64;
+        if h_bar <= 180.0 {
+            h_prime_average = (h_prime_1 + h_prime_2) / 2.0;
+        } else if h_bar > 180.0 && (h_prime_1 + h_prime_2) < 360.0 {
+            h_prime_average = (h_prime_1 + h_prime_2 + 360.0) / 2.0;
         } else {
-            h_prime_average = (h_prime_1 + h_prime_2 - 360f64) / 2f64;
+            h_prime_average = (h_prime_1 + h_prime_2 - 360.0) / 2.0;
         }
     }
-    let mut l_prime_average_minus_50_square = l_prime_average - 50f64;
+    let mut l_prime_average_minus_50_square = l_prime_average - 50.0;
     l_prime_average_minus_50_square *= l_prime_average_minus_50_square;
 
-    let s_l = 1f64 +
-              ((0.015f64 * l_prime_average_minus_50_square) /
-               (20f64 + l_prime_average_minus_50_square).sqrt());
-    let s_c = 1f64 + 0.045f64 * c_prime_average;
-    let t = 1f64 - 0.17f64 * ((h_prime_average - 30f64).to_radians()).cos() +
-            0.24f64 * ((h_prime_average * 2f64).to_radians()).cos() +
-            0.32f64 * ((h_prime_average * 3f64 + 6f64).to_radians()).cos() -
-            0.2f64 * ((h_prime_average * 4f64 - 63f64).to_radians()).cos();
-    let s_h = 1f64 + 0.015f64 * t * c_prime_average;
-    let mut h_prime_average_minus_275_div_25_square = (h_prime_average - 275f64) / 25f64;
+    let s_l = 1.0 +
+              ((0.015 * l_prime_average_minus_50_square) /
+               (20.0 + l_prime_average_minus_50_square).sqrt());
+    let s_c = 1.0 + 0.045 * c_prime_average;
+    let t = 1.0 - 0.17 * ((h_prime_average - 30.0).to_radians()).cos() +
+            0.24 * ((h_prime_average * 2.0).to_radians()).cos() +
+            0.32 * ((h_prime_average * 3.0 + 6.0).to_radians()).cos() -
+            0.2 * ((h_prime_average * 4.0 - 63.0).to_radians()).cos();
+    let s_h = 1.0 + 0.015 * t * c_prime_average;
+    let mut h_prime_average_minus_275_div_25_square = (h_prime_average - 275.0) / 25.0;
     h_prime_average_minus_275_div_25_square *= h_prime_average_minus_275_div_25_square;
-    let delta_theta = 30f64 * (-h_prime_average_minus_275_div_25_square).exp();
+    let delta_theta = 30.0 * (-h_prime_average_minus_275_div_25_square).exp();
 
     let mut c_prime_average_pot_7 = c_prime_average * c_prime_average * c_prime_average;
     c_prime_average_pot_7 *= c_prime_average_pot_7 * c_prime_average;
-    let r_c = 2f64 * (c_prime_average_pot_7 / (c_prime_average_pot_7 + 6103515625f64)).sqrt();
+    let r_c = 2.0 * (c_prime_average_pot_7 / (c_prime_average_pot_7 + 6103515625.0)).sqrt();
 
-    let r_t = -((2f64 * delta_theta).to_radians()).sin() * r_c;
+    let r_t = -((2.0 * delta_theta).to_radians()).sin() * r_c;
 
     let delta_l_prime_div_k_l_s_l = delta_l_prime / (s_l * k_l);
     let delta_c_prime_div_k_c_s_c = delta_c_prime / (s_c * k_c);
@@ -175,7 +174,7 @@ pub fn ciede2000(lab1: &Lab<f64>, lab2: &Lab<f64>) -> f64 {
                      r_t * delta_c_prime_div_k_c_s_c * delta_h_prime_div_k_h_s_h)
                         .sqrt();
 
-    return ciede2000 as f64;
+    return ciede2000;
 }
 
 #[cfg(test)]
@@ -183,7 +182,7 @@ mod test {
     use super::*;
     use palette::Lab;
 
-    fn ciede2000_case(l1: f64, a1: f64, b1: f64, l2: f64, a2: f64, b2: f64, de: f64) {
+    fn ciede2000_case(l1: f32, a1: f32, b1: f32, l2: f32, a2: f32, b2: f32, de: f32) {
         let lab1 = Lab::new(l1 / 100.0, a1 / 128.0, b1 / 128.0);
         let lab2 = Lab::new(l2 / 100.0, a2 / 128.0, b2 / 128.0);
         assert_eq!((ciede2000(&lab1, &lab2) * 10000.0).round() / 10000.0, de);

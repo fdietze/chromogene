@@ -21,11 +21,11 @@ use color::*;
 
 #[derive(Debug, Clone)]
 struct ColorScheme {
-    free_colors: Vec<Lab<f64>>,
+    free_colors: Vec<Lab>,
 }
 
 lazy_static! {
-    static ref FIXED_COLORS: [Lab<f64>; 2] = [srgb!(0, 43, 54), srgb!(253, 246, 227)];
+    static ref FIXED_COLORS: [Lab; 2] = [srgb!(0, 43, 54), srgb!(253, 246, 227)];
 }
 const FREE_COLOR_COUNT: usize = 8;
 
@@ -37,7 +37,7 @@ impl ColorScheme {
         println!("");
         let mut sorted = self.free_colors.clone();
         sorted.sort_by_key(|&col| {
-            let lch: Lch<f64> = col.into();
+            let lch: Lch = col.into();
             (lch.hue.to_positive_degrees() * 100.0) as usize + (lch.l * 1000.0) as usize
         });
         for color in sorted.iter() {
@@ -53,96 +53,93 @@ impl ColorScheme {
         }
         println!("");
     }
-    fn fitness_print(&self, print: bool) -> f64 {
+    fn fitness_print(&self, print: bool) -> f32 {
         // fn convert_to_desired
-        fn distance(col1: &Lab<f64>, col2: &Lab<f64>) -> f64 {
+        fn distance(col1: &Lab, col2: &Lab) -> f32 {
             // euclidean_distance(col1, col2)
             ciede2000(col1, col2)
         };
 
-        let fixed_free_dist: Vec<(&Lab<f64>, &Lab<f64>, f64)> = FIXED_COLORS.iter()
-                                                                            .flat_map(|col1| {
-                                                                                self.free_colors
-                    .iter()
-                    .map(move |col2| {
-                        (col1,
-                         col2,
-                         distance(col1,
-                                  col2))
-                    })
-                                                                            })
-                                                                            .collect();
+        let fixed_free_dist: Vec<(&Lab, &Lab, f32)> = FIXED_COLORS.iter()
+                                                                  .flat_map(|col1| {
+                                                                      self.free_colors
+                                                                          .iter()
+                                                                          .map(move |col2| {
+                                                                              (col1,
+                                                                               col2,
+                                                                               distance(col1, col2))
+                                                                          })
+                                                                  })
+                                                                  .collect();
 
-        let free_dist: Vec<(&Lab<f64>, &Lab<f64>, f64)> = self.free_colors
-                                                              .iter()
-                                                              .enumerate()
-                                                              .flat_map(|(i, col1)| {
-                                                                  self.free_colors
-                                                                      .iter()
-                                                                      .skip(i + 1)
-                                                                      .map(move |col2| {
-                                                                          (col1,
-                                                                           col2,
-                                                                           distance(col1, col2))
-                                                                      })
-                                                              })
-                                                              .collect();
+        let free_dist: Vec<(&Lab, &Lab, f32)> = self.free_colors
+                                                    .iter()
+                                                    .enumerate()
+                                                    .flat_map(|(i, col1)| {
+                                                        self.free_colors
+                                                            .iter()
+                                                            .skip(i + 1)
+                                                            .map(move |col2| {
+                                                                (col1, col2, distance(col1, col2))
+                                                            })
+                                                    })
+                                                    .collect();
 
         let avg_free_dist = free_dist.iter()
                                      .map(|&(_, _, dist)| dist)
                                      .fold(0.0, |sum, x| sum + x) /
-                            free_dist.len() as f64;
+                            free_dist.len() as f32;
 
         let avg_fixed_dist = fixed_free_dist.iter()
                                             .map(|&(_, _, dist)| dist)
                                             .fold(0.0, |sum, x| sum + x) /
-                             fixed_free_dist.len() as f64;
+                             fixed_free_dist.len() as f32;
 
         let var_free_dist = free_dist.iter()
                                      .map(|&(_, _, dist)| (dist - avg_free_dist).powi(2))
                                      .fold(0.0, |sum, x| sum + x) /
-                            free_dist.len() as f64;
+                            free_dist.len() as f32;
 
         let var_fixed_dist = fixed_free_dist.iter()
                                             .map(|&(_, _, dist)| (dist - avg_fixed_dist).powi(2))
                                             .fold(0.0, |sum, x| sum + x) /
-                             fixed_free_dist.len() as f64;
+                             fixed_free_dist.len() as f32;
 
         let min_free_dist = free_dist.iter()
                                      .map(|&(_, _, dist)| dist)
-                                     .fold(std::f64::MAX, |min, x| min.min(x));
+                                     .fold(std::f32::MAX, |min, x| min.min(x));
 
         let min_fixed_dist = fixed_free_dist.iter()
                                             .map(|&(_, _, dist)| dist)
-                                            .fold(std::f64::MAX, |min, x| min.min(x));
+                                            .fold(std::f32::MAX, |min, x| min.min(x));
 
         let avg_chroma = self.free_colors
                              .iter()
                              .map(|&col| {
-                                 let lch: Lch<f64> = col.into();
+                                 let lch: Lch = col.into();
                                  lch.chroma * 128.0
                              })
                              .fold(0.0, |sum, x| sum + x) /
-                         self.free_colors.len() as f64;
+                         self.free_colors.len() as f32;
         let var_chroma = self.free_colors
                              .iter()
                              .map(|&col| {
-                                 let lch: Lch<f64> = col.into();
+                                 let lch: Lch = col.into();
                                  (lch.chroma * 128.0 - avg_chroma).powi(2)
                              })
                              .fold(0.0, |sum, x| sum + x) /
-                         self.free_colors.len() as f64;
+                         self.free_colors.len() as f32;
 
         let avg_luminance = self.free_colors
                                 .iter()
                                 .map(|&col| col.l * 100.0)
                                 .fold(0.0, |sum, x| sum + x) /
-                            self.free_colors.len() as f64;
+                            self.free_colors.len() as f32;
         let var_luminance = self.free_colors
                                 .iter()
                                 .map(|&col| (col.l * 100.0 - avg_luminance).powi(2))
                                 .fold(0.0, |sum, x| sum + x) /
-                            self.free_colors.len() as f64;
+                            self.free_colors.len() as f32;
 
         if print {
             for &coldist in fixed_free_dist.iter() {
@@ -170,37 +167,37 @@ impl ColorScheme {
 
 impl Rand for ColorScheme {
     fn rand<R: Rng>(rng: &mut R) -> ColorScheme {
-        let free_colors: Vec<Lab<f64>> = (0..FREE_COLOR_COUNT)
-                                             .map(|_| {
-                                                 Rgb::<f64>::new(rng.gen_range(0f64, 1f64),
-                                                                 rng.gen_range(0f64, 1f64),
-                                                                 rng.gen_range(0f64, 1f64))
-                                                     .into()
-                                             })
-                                             .collect();
+        let free_colors: Vec<Lab> = (0..FREE_COLOR_COUNT)
+                                        .map(|_| {
+                                            Rgb::new(rng.gen_range(0.0, 1.0),
+                                                     rng.gen_range(0.0, 1.0),
+                                                     rng.gen_range(0.0, 1.0))
+                                                .into()
+                                        })
+                                        .collect();
 
         ColorScheme { free_colors: free_colors }
     }
 }
 
 impl Genotype<ColorScheme> for ColorScheme {
-    fn fitness(&self) -> f64 {
+    fn fitness(&self) -> f32 {
         self.fitness_print(false)
     }
-    fn mutated<R: Rng>(&self, mut rng: &mut R, heat: f64) -> ColorScheme {
+    fn mutated<R: Rng>(&self, mut rng: &mut R, heat: f32) -> ColorScheme {
         let distribution = Normal::new(0.0, 0.15);
         let mutated_free = self.free_colors
                                .iter()
                                .map(|color| {
-                                   let diff = Lab::<f64>::new(distribution.ind_sample(&mut rng) *
-                                                              heat,
-                                                              distribution.ind_sample(&mut rng) *
-                                                              heat,
-                                                              distribution.ind_sample(&mut rng) *
-                                                              heat);
+                                   let diff = Lab::new(distribution.ind_sample(&mut rng) as f32 *
+                                                       heat,
+                                                       distribution.ind_sample(&mut rng) as f32 *
+                                                       heat,
+                                                       distribution.ind_sample(&mut rng) as f32 *
+                                                       heat);
                                    let mut lab = *color + diff;
                                    lab.clamp_self();
-                                   let mut rgb: Rgb<f64> = lab.into();
+                                   let mut rgb: Rgb = lab.into();
                                    rgb.clamp_self();
                                    let lab = rgb.into();
                                    lab
@@ -234,7 +231,7 @@ fn main() {
     let mut p: Population<ColorScheme> = Population::new(population_size, &mut rng);
     let mut latest: Option<ColorScheme> = None;
     for i in 0..generations {
-        let heat = 0.04;//(1.0 - i as f64 / generations as f64).powi(2);
+        let heat = 0.04;//(1.0 - i as f32 / generations as f32).powi(2);
         let best = p.iterate(&mut rng, heat);
         best.preview();
         println!("{:04}: best fitness: {:11.5}, heat: {:5.3}\n",

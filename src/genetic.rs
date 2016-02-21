@@ -1,16 +1,16 @@
 use rand::{thread_rng, Rng, Rand};
 use std::cmp::Ordering;
-use std::f64::{MIN, MAX};
+use std::f32::{MIN, MAX};
 
 pub trait Genotype<G:Genotype<G> + Clone + Rand> {
-    fn fitness(&self) -> f64;
-    fn mutated<R: Rng>(&self, rng: &mut R, heat: f64) -> G;
+    fn fitness(&self) -> f32;
+    fn mutated<R: Rng>(&self, rng: &mut R, heat: f32) -> G;
     fn crossover<R: Rng>(&self, rng: &mut R, other: &G) -> G;
 }
 
 pub struct Population<G: Genotype<G> + Clone + Rand> {
     pub genotypes: Vec<G>,
-    pub mutation_index: f64, // pub elitism: f64,
+    pub mutation_index: f32, // pub elitism: f32,
 }
 
 impl<G: Genotype<G> + Clone + Rand> Default for Population<G> {
@@ -27,8 +27,8 @@ impl<G: Genotype<G> + Clone + Rand> Population<G> {
         let genotypes = (0..size).map(|_| rng.gen::<G>()).collect();
         Population { genotypes: genotypes, ..Default::default() }
     }
-    pub fn iterate<R: Rng>(&mut self, rng: &mut R, heat: f64) -> G {
-        let fitnesses: Vec<f64> = self.genotypes.iter().map(|g| g.fitness()).collect();
+    pub fn iterate<R: Rng>(&mut self, rng: &mut R, heat: f32) -> G {
+        let fitnesses: Vec<f32> = self.genotypes.iter().map(|g| g.fitness()).collect();
 
         let best = self.genotypes
                        .iter()
@@ -45,7 +45,7 @@ impl<G: Genotype<G> + Clone + Rand> Population<G> {
                        .clone();
 
         let min_fitness = fitnesses.iter().fold(MAX, |min, &x| min.min(x));
-        let mut cumulative_fitnesses: Vec<f64> = Vec::with_capacity(self.genotypes.len());
+        let mut cumulative_fitnesses: Vec<f32> = Vec::with_capacity(self.genotypes.len());
         let mut sum = 0.0;
         for &fitness in fitnesses.iter() {
             let current = fitness - min_fitness; // shift lowest fitness to zero
@@ -78,7 +78,7 @@ impl<G: Genotype<G> + Clone + Rand> Population<G> {
     }
 }
 
-fn roulette_wheel_selection(cumulative_fitness: &Vec<f64>, rand: f64) -> usize {
+fn roulette_wheel_selection(cumulative_fitness: &Vec<f32>, rand: f32) -> usize {
     cumulative_fitness.binary_search_by(|probe| {
                           if probe > &rand {
                               Ordering::Greater
