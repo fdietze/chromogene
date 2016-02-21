@@ -1,10 +1,73 @@
-use palette::Lab;
+use palette::{Lab, Rgb};
+use palette::pixel::Srgb;
+use palette::Limited;
 use std::f64::consts::PI;
 
 #[allow(dead_code)]
 pub fn euclidean_distance(a: &Lab<f64>, b: &Lab<f64>) -> f64 {
     (((a.l - b.l) * 100.0).powi(2) + ((a.a - b.a) * 128.0).powi(2) + ((a.b - b.b) * 128.0).powi(2))
         .sqrt()
+}
+
+macro_rules! srgb {
+    ( $r:expr,$g:expr, $b:expr ) => {
+        {
+    Srgb::<f64>::new($r as f64 / 255.0, $g as f64 / 255.0, $b as f64 / 255.0)
+        .to_linear()
+        .into()
+        }
+    };
+}
+
+pub fn term_bgcolor(color: Srgb<f64>, text: &str) -> String {
+    // format!("\x1b[48;2;{red};{green};{blue}m{text}\x1b[0m(RGB({red:3} {green:3} {blue:3}))",
+    format!("\x1b[48;2;{red};{green};{blue}m{text}\x1b[0m",
+            red = (color.red * 255f64) as usize,
+            green = (color.green * 255f64) as usize,
+            blue = (color.blue * 255f64) as usize,
+            text = text,
+            )
+}
+
+pub fn term_fgcolor(color: Srgb<f64>, text: &str) -> String {
+    // format!("\x1b[48;2;{red};{green};{blue}m{text}\x1b[0m(RGB({red:3} {green:3} {blue:3}))",
+    format!("\x1b[38;2;{red};{green};{blue}m{text}\x1b[0m",
+            red = (color.red * 255f64) as usize,
+            green = (color.green * 255f64) as usize,
+            blue = (color.blue * 255f64) as usize,
+            text = text,
+            )
+}
+
+pub fn print_color(color: &Lab<f64>) {
+    let mut rgb: Rgb<f64> = (*color).into();
+    rgb.clamp_self();
+    let color = Srgb::from_linear(rgb);
+    print!("{}", term_bgcolor(color, "   "));
+}
+
+pub fn print_colored_text(bg: &Lab<f64>, fg: &Lab<f64>, text: &str) {
+    let mut rgb_bg: Rgb<f64> = (*bg).into();
+    rgb_bg.clamp_self();
+    let bg = Srgb::from_linear(rgb_bg);
+    let mut rgb_fg: Rgb<f64> = (*fg).into();
+    rgb_fg.clamp_self();
+    let fg = Srgb::from_linear(rgb_fg);
+    print!("{}", term_bgcolor(bg, &term_fgcolor(fg, text)));
+}
+
+pub fn print_col_dist(coldist: (&Lab<f64>, &Lab<f64>, f64)) {
+    let (col1, col2, dist) = coldist;
+    print_color(col1);
+    print_color(col2);
+    println!(" distance: {:5.2} Lab({:3.0} {:3.0} {:3.0}) Lab({:3.0} {:3.0} {:3.0})",
+             dist,
+             col1.l * 100.0,
+             col1.a * 128.0,
+             col1.b * 128.0,
+             col2.l * 100.0,
+             col2.a * 128.0,
+             col2.b * 128.0);
 }
 
 // TODO: http://www.brucelindbloom.com/index.html?Eqn_DeltaE_CMC.html

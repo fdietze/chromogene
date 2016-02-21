@@ -1,112 +1,37 @@
 extern crate palette;
 extern crate rand;
+#[macro_use]
+extern crate lazy_static;
+
 use palette::{Lab, Lch, Rgb};
+use std::ops::Add;
 use palette::Limited;
 use palette::pixel::Srgb;
 
-use rand::{thread_rng, Rng};
+use rand::{thread_rng, Rng, Rand};
 use rand::distributions::{Normal, IndependentSample};
 
 mod genetic;
 use genetic::{Population, Genotype};
 
+#[macro_use]
 mod color;
 #[allow(unused_imports)]
-use color::{ciede2000, euclidean_distance};
-
-fn srgb(r: usize, g: usize, b: usize) -> Lab<f64> {
-    Srgb::<f64>::new(r as f64 / 255.0, g as f64 / 255.0, b as f64 / 255.0)
-        .to_linear()
-        .into()
-}
-
-
-pub fn term_bgcolor(color: Srgb<f64>, text: &str) -> String {
-    // format!("\x1b[48;2;{red};{green};{blue}m{text}\x1b[0m(RGB({red:3} {green:3} {blue:3}))",
-    format!("\x1b[48;2;{red};{green};{blue}m{text}\x1b[0m",
-            red = (color.red * 255f64) as usize,
-            green = (color.green * 255f64) as usize,
-            blue = (color.blue * 255f64) as usize,
-            text = text,
-            )
-}
-
-pub fn term_fgcolor(color: Srgb<f64>, text: &str) -> String {
-    // format!("\x1b[48;2;{red};{green};{blue}m{text}\x1b[0m(RGB({red:3} {green:3} {blue:3}))",
-    format!("\x1b[38;2;{red};{green};{blue}m{text}\x1b[0m",
-            red = (color.red * 255f64) as usize,
-            green = (color.green * 255f64) as usize,
-            blue = (color.blue * 255f64) as usize,
-            text = text,
-            )
-}
-
-pub fn print_color(color: &Lab<f64>) {
-    let mut rgb: Rgb<f64> = (*color).into();
-    rgb.clamp_self();
-    let color = Srgb::from_linear(rgb);
-    print!("{}", term_bgcolor(color, "   "));
-}
-
-pub fn print_colored_text(bg: &Lab<f64>, fg: &Lab<f64>, text: &str) {
-    let mut rgb_bg: Rgb<f64> = (*bg).into();
-    rgb_bg.clamp_self();
-    let bg = Srgb::from_linear(rgb_bg);
-    let mut rgb_fg: Rgb<f64> = (*fg).into();
-    rgb_fg.clamp_self();
-    let fg = Srgb::from_linear(rgb_fg);
-    print!("{}", term_bgcolor(bg, &term_fgcolor(fg, text)));
-}
-
-fn print_col_dist(coldist: (&Lab<f64>, &Lab<f64>, f64)) {
-    let (col1, col2, dist) = coldist;
-    print_color(col1);
-    print_color(col2);
-    println!(" distance: {:5.2} Lab({:3.0} {:3.0} {:3.0}) Lab({:3.0} {:3.0} {:3.0})",
-             dist,
-             col1.l * 100.0,
-             col1.a * 128.0,
-             col1.b * 128.0,
-             col2.l * 100.0,
-             col2.a * 128.0,
-             col2.b * 128.0);
-}
-
+use color::*;
 
 #[derive(Debug, Clone)]
 struct ColorScheme {
-    color_count: usize,
-    fixed_colors: Vec<Lab<f64>>,
     free_colors: Vec<Lab<f64>>,
 }
 
+lazy_static! {
+    static ref FIXED_COLORS: [Lab<f64>; 2] = [srgb!(0, 43, 54), srgb!(253, 246, 227)];
+}
+const FREE_COLOR_COUNT: usize = 8;
+
 impl ColorScheme {
-    fn random(count: usize, fixed_colors: Vec<Lab<f64>>) -> ColorScheme {
-        let free_count = count as isize - fixed_colors.len() as isize;
-        assert!(free_count >= 0);
-
-        let mut rng = thread_rng();
-
-        let mut free_colors = vec![];
-        for _ in 0..free_count {
-            let rgb = Rgb::<f64>::new(rng.gen_range(0f64, 1f64),
-                                      rng.gen_range(0f64, 1f64),
-                                      rng.gen_range(0f64, 1f64));
-            // TODO: colorblind transformation
-            free_colors.push(rgb.into());
-        }
-
-
-        ColorScheme {
-            color_count: count,
-            fixed_colors: fixed_colors,
-            free_colors: free_colors,
-        }
-    }
-
-
     pub fn preview(&self) {
-        for color in self.fixed_colors.iter() {
+        for color in FIXED_COLORS.iter() {
             print_color(color);
         }
         println!("");
@@ -120,7 +45,7 @@ impl ColorScheme {
         }
 
         println!("");
-        for bg in self.fixed_colors.iter() {
+        for bg in FIXED_COLORS.iter() {
             for fg in self.free_colors.iter() {
                 print_colored_text(bg, fg, "delgmpgl ");
             }
@@ -135,19 +60,18 @@ impl ColorScheme {
             ciede2000(col1, col2)
         };
 
-        let fixed_free_dist: Vec<(&Lab<f64>, &Lab<f64>, f64)> = self.fixed_colors
-                                                                    .iter()
-                                                                    .flat_map(|col1| {
-                                                                        self.free_colors
-                                                                            .iter()
-                                                                            .map(move |col2| {
-                                                                                (col1,
-                                                                                 col2,
-                                                                                 distance(col1,
-                                                                                          col2))
+        let fixed_free_dist: Vec<(&Lab<f64>, &Lab<f64>, f64)> = FIXED_COLORS.iter()
+                                                                            .flat_map(|col1| {
+                                                                                self.free_colors
+                    .iter()
+                    .map(move |col2| {
+                        (col1,
+                         col2,
+                         distance(col1,
+                                  col2))
+                    })
                                                                             })
-                                                                    })
-                                                                    .collect();
+                                                                            .collect();
 
         let free_dist: Vec<(&Lab<f64>, &Lab<f64>, f64)> = self.free_colors
                                                               .iter()
@@ -244,46 +168,48 @@ impl ColorScheme {
     }
 }
 
+impl Rand for ColorScheme {
+    fn rand<R: Rng>(rng: &mut R) -> ColorScheme {
+        let free_colors: Vec<Lab<f64>> = (0..FREE_COLOR_COUNT)
+                                             .map(|_| {
+                                                 Rgb::<f64>::new(rng.gen_range(0f64, 1f64),
+                                                                 rng.gen_range(0f64, 1f64),
+                                                                 rng.gen_range(0f64, 1f64))
+                                                     .into()
+                                             })
+                                             .collect();
+
+        ColorScheme { free_colors: free_colors }
+    }
+}
+
 impl Genotype<ColorScheme> for ColorScheme {
     fn fitness(&self) -> f64 {
         self.fitness_print(false)
     }
-    fn mutated(&self, heat: f64) -> ColorScheme {
-        let mut rng = thread_rng();
+    fn mutated<R: Rng>(&self, mut rng: &mut R, heat: f64) -> ColorScheme {
         let distribution = Normal::new(0.0, 0.15);
         let mutated_free = self.free_colors
                                .iter()
                                .map(|color| {
-                                   let lab = Lab::<f64>::new((color.l +
+                                   let diff = Lab::<f64>::new(distribution.ind_sample(&mut rng) *
+                                                              heat,
                                                               distribution.ind_sample(&mut rng) *
-                                                              heat)
-                                                                 .max(0f64)
-                                                                 .min(1f64),
-                                                             (color.a +
+                                                              heat,
                                                               distribution.ind_sample(&mut rng) *
-                                                              heat)
-                                                                 .max(-1f64)
-                                                                 .min(1f64),
-                                                             (color.b +
-                                                              distribution.ind_sample(&mut rng) *
-                                                              heat)
-                                                                 .max(-1f64)
-                                                                 .min(1f64));
+                                                              heat);
+                                   let mut lab = *color + diff;
+                                   lab.clamp_self();
                                    let mut rgb: Rgb<f64> = lab.into();
                                    rgb.clamp_self();
                                    let lab = rgb.into();
                                    lab
                                })
                                .collect();
-        ColorScheme {
-            color_count: self.color_count,
-            fixed_colors: self.fixed_colors.clone(),
-            free_colors: mutated_free,
-        }
+        ColorScheme { free_colors: mutated_free }
     }
 
-    fn crossover(&self, other: &ColorScheme) -> ColorScheme {
-        let mut rng = thread_rng();
+    fn crossover<R: Rng>(&self, rng: &mut R, other: &ColorScheme) -> ColorScheme {
         let free = self.free_colors
                        .iter()
                        .zip(other.free_colors.iter())
@@ -296,37 +222,20 @@ impl Genotype<ColorScheme> for ColorScheme {
                        })
                        .collect();
 
-        ColorScheme {
-            color_count: self.color_count,
-            fixed_colors: self.fixed_colors.clone(),
-            free_colors: free,
-        }
-    }
-
-    fn create_random_population(size: usize) -> Population<ColorScheme> {
-        let fixed = vec![srgb(0, 43, 54), srgb(253, 246, 227)];
-        let total = 10;
-
-        let schemes = (0..size)
-                          .map(|_| ColorScheme::random(total, fixed.clone()))
-                          .collect();
-        Population {
-            genotypes: schemes,
-            mutation_index: 0.25,
-        }
+        ColorScheme { free_colors: free }
     }
 }
 
 fn main() {
-    let generations = 10000;
+    let generations = 100;
     let population_size = 1000;
-    let elitism = 0;
 
-    let mut p = ColorScheme::create_random_population(population_size);
+    let mut rng = thread_rng();
+    let mut p: Population<ColorScheme> = Population::new(population_size, &mut rng);
     let mut latest: Option<ColorScheme> = None;
     for i in 0..generations {
         let heat = 0.04;//(1.0 - i as f64 / generations as f64).powi(2);
-        let best = p.iterate(heat, elitism);
+        let best = p.iterate(&mut rng, heat);
         best.preview();
         println!("{:04}: best fitness: {:11.5}, heat: {:5.3}\n",
                  i,

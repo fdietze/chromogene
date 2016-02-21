@@ -6,6 +6,7 @@ authors = ["Felix Dietze <felix@beerleader.net>"]
 [dependencies]
 palette = "0.2"
 rand = "0.3"
+lazy_static = "0.1.*"
 
 # The release profile, used for `cargo build --release`
 [profile.release]
