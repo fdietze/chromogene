@@ -19,9 +19,10 @@ mod color;
 #[allow(unused_imports)]
 use color::*;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 struct ColorScheme {
     free_colors: Vec<Lab>,
+    fitness: f32,
 }
 
 lazy_static! {
@@ -176,63 +177,67 @@ impl Rand for ColorScheme {
                                         })
                                         .collect();
 
-        ColorScheme { free_colors: free_colors }
+        ColorScheme { free_colors: free_colors, ..Default::default() }
     }
 }
 
 impl Genotype<ColorScheme> for ColorScheme {
-    fn fitness(&self) -> f32 {
-        self.fitness_print(false)
+    fn calculate_fitness(&mut self) {
+        self.fitness = self.fitness_print(false);
     }
+    fn fitness(&self) -> f32 {
+        self.fitness
+    }
+
     fn mutated<R: Rng>(&self, mut rng: &mut R, heat: f32) -> ColorScheme {
         let distribution = Normal::new(0.0, 0.15);
-        let mutated_free = self.free_colors
-                               .iter()
-                               .map(|color| {
-                                   let diff = Lab::new(distribution.ind_sample(&mut rng) as f32 *
-                                                       heat,
-                                                       distribution.ind_sample(&mut rng) as f32 *
-                                                       heat,
-                                                       distribution.ind_sample(&mut rng) as f32 *
-                                                       heat);
-                                   let mut lab = *color + diff;
-                                   lab.clamp_self();
-                                   let mut rgb: Rgb = lab.into();
-                                   rgb.clamp_self();
-                                   let lab = rgb.into();
-                                   lab
-                               })
-                               .collect();
-        ColorScheme { free_colors: mutated_free }
+        let mut mutated_free = self.free_colors.clone();
+        for _ in 0..mutated_free.len() / 4 {
+            let index = rng.gen_range(0, mutated_free.len());
+            let diff = Lab::new(distribution.ind_sample(&mut rng) as f32 * heat,
+                                distribution.ind_sample(&mut rng) as f32 * heat,
+                                distribution.ind_sample(&mut rng) as f32 * heat);
+            let mut lab = mutated_free[index] + diff;
+            lab.clamp_self();
+            let mut rgb: Rgb = lab.into();
+            rgb.clamp_self();
+            mutated_free[index] = rgb.into();
+        }
+
+        ColorScheme { free_colors: mutated_free, ..Default::default() }
     }
 
     fn crossover<R: Rng>(&self, rng: &mut R, other: &ColorScheme) -> ColorScheme {
-        let free = self.free_colors
-                       .iter()
-                       .zip(other.free_colors.iter())
-                       .map(|(a, b)| {
-                           if rng.gen::<bool>() {
-                               *a
-                           } else {
-                               *b
-                           }
-                       })
-                       .collect();
+        let mut sorted_a = self.free_colors.clone();
+        sorted_a.sort_by_key(|&col| {
+            let lch: Lch = col.into();
+            (lch.hue.to_positive_degrees() * 100.0) as usize
+        });
+        let mut sorted_b = other.free_colors.clone();
+        sorted_b.sort_by_key(|&col| {
+            let lch: Lch = col.into();
+            (lch.hue.to_positive_degrees() * 100.0) as usize
+        });
+        let free = sorted_a.iter()
+            .zip(sorted_b.iter())
+            .map(|(a, b)| (*a + *b) / 2.0)
+            // .map(|(a, b)| if rng.gen::<bool>() {*a} else {*b})
+            .collect();
 
-        ColorScheme { free_colors: free }
+        ColorScheme { free_colors: free, ..Default::default() }
     }
 }
 
 fn main() {
-    let generations = 100;
+    let generations = 4000;
     let population_size = 1000;
 
     let mut rng = thread_rng();
     let mut p: Population<ColorScheme> = Population::new(population_size, &mut rng);
     let mut latest: Option<ColorScheme> = None;
     for i in 0..generations {
-        let heat = 0.04;//(1.0 - i as f32 / generations as f32).powi(2);
-        let best = p.iterate(&mut rng, heat);
+        let heat = 0.5; //(1.0 - i as f32 / generations as f32).powi(2);
+        let best = p.next_generation(&mut rng, heat);
         best.preview();
         println!("{:04}: best fitness: {:11.5}, heat: {:5.3}\n",
                  i,

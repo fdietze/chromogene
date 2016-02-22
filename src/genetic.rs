@@ -1,16 +1,17 @@
-use rand::{thread_rng, Rng, Rand};
+use rand::{Rng, Rand};
 use std::cmp::Ordering;
-use std::f32::{MIN, MAX};
 
 pub trait Genotype<G:Genotype<G> + Clone + Rand> {
     fn fitness(&self) -> f32;
+    fn calculate_fitness(&mut self);
     fn mutated<R: Rng>(&self, rng: &mut R, heat: f32) -> G;
     fn crossover<R: Rng>(&self, rng: &mut R, other: &G) -> G;
 }
 
 pub struct Population<G: Genotype<G> + Clone + Rand> {
     pub genotypes: Vec<G>,
-    pub mutation_index: f32, // pub elitism: f32,
+    pub mutation_index: f32,
+    pub elitism: usize,
 }
 
 impl<G: Genotype<G> + Clone + Rand> Default for Population<G> {
@@ -18,6 +19,7 @@ impl<G: Genotype<G> + Clone + Rand> Default for Population<G> {
         Population {
             genotypes: vec![],
             mutation_index: 0.25,
+            elitism: 1,
         }
     }
 }
@@ -27,45 +29,27 @@ impl<G: Genotype<G> + Clone + Rand> Population<G> {
         let genotypes = (0..size).map(|_| rng.gen::<G>()).collect();
         Population { genotypes: genotypes, ..Default::default() }
     }
-    pub fn iterate<R: Rng>(&mut self, rng: &mut R, heat: f32) -> G {
-        let fitnesses: Vec<f32> = self.genotypes.iter().map(|g| g.fitness()).collect();
-
-        let best = self.genotypes
-                       .iter()
-                       .zip(fitnesses.iter())
-                       .fold((self.genotypes.first().unwrap(), MIN),
-                             |(mg, mf), (g, &f)| {
-                                 if f > mf {
-                                     (g, f)
-                                 } else {
-                                     (mg, mf)
-                                 }
-                             })
-                       .0
-                       .clone();
-
-        let min_fitness = fitnesses.iter().fold(MAX, |min, &x| min.min(x));
-        let mut cumulative_fitnesses: Vec<f32> = Vec::with_capacity(self.genotypes.len());
-        let mut sum = 0.0;
-        for &fitness in fitnesses.iter() {
-            let current = fitness - min_fitness; // shift lowest fitness to zero
-            sum += current;
-            cumulative_fitnesses.push(sum);
+    pub fn next_generation<R: Rng>(&mut self, rng: &mut R, heat: f32) -> G {
+        for genotype in self.genotypes.iter_mut() {
+            genotype.calculate_fitness();
         }
-        let sum = sum;
-        let cumulative_fitnesses = cumulative_fitnesses;
+
+        self.genotypes.sort_by(|geno_a, geno_b| {
+            if geno_a.fitness() > geno_b.fitness() {
+                Ordering::Less
+            } else if geno_a.fitness() < geno_b.fitness() {
+                Ordering::Greater
+            } else {
+                Ordering::Equal
+            }
+        });
 
         let old = self.genotypes.clone();
-        for genotype in self.genotypes.iter_mut() {
-            let parent_index_a = roulette_wheel_selection(&cumulative_fitnesses,
-                                                          rng.gen_range(0.0, sum)); // fails when sum == 0.0 (all individuals have the same fitness)
-            let parent_index_b = roulette_wheel_selection(&cumulative_fitnesses,
-                                                          rng.gen_range(0.0, sum));
-            let child = old[parent_index_a].crossover(rng, &old[parent_index_b]);
-            // println!("selected {} {:5.3} -mutate-> {:5.3}",
-            //          index,
-            //          fitnesses[index],
-            //          child.fitness());
+        for genotype in self.genotypes.iter_mut().skip(self.elitism) {
+            let parent_a = tournament_selection(&old, 4, rng);
+            let parent_b = tournament_selection(&old, 4, rng);
+            let child = parent_a.crossover(rng, &parent_b);
+
             *genotype = if rng.gen_range(0.0, 1.0) < self.mutation_index {
                 child.mutated(rng, heat)
             } else {
@@ -74,10 +58,28 @@ impl<G: Genotype<G> + Clone + Rand> Population<G> {
         }
 
 
+        let best = old[0].clone();
         best
     }
 }
 
+#[allow(dead_code)]
+fn tournament_selection<'a, G: Genotype<G> + Clone + Rand, R: Rng>(genotypes: &'a Vec<G>,
+                                                                   size: usize,
+                                                                   rng: &mut R)
+                                                                   -> &'a G {
+    assert!(size >= 1);
+    (0..size).fold(rng.choose(genotypes).unwrap(), |best, _| {
+        let competitor = rng.choose(genotypes).unwrap();
+        if competitor.fitness() > best.fitness() {
+            competitor
+        } else {
+            best
+        }
+    })
+}
+
+#[allow(dead_code)]
 fn roulette_wheel_selection(cumulative_fitness: &Vec<f32>, rand: f32) -> usize {
     cumulative_fitness.binary_search_by(|probe| {
                           if probe > &rand {
