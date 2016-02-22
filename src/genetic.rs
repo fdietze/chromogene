@@ -4,8 +4,8 @@ use std::cmp::Ordering;
 pub trait Genotype<G:Genotype<G> + Clone + Rand> {
     fn fitness(&self) -> f32;
     fn calculate_fitness(&mut self);
-    fn mutated<R: Rng>(&self, rng: &mut R, heat: f32) -> G;
-    fn crossover<R: Rng>(&self, rng: &mut R, other: &G) -> G;
+    fn mutated<R: Rng>(&self, strength: f32, rng: &mut R) -> G;
+    fn crossover<R: Rng>(&self, other: &G, rng: &mut R) -> G;
 }
 
 pub struct Population<G: Genotype<G> + Clone + Rand> {
@@ -29,7 +29,7 @@ impl<G: Genotype<G> + Clone + Rand> Population<G> {
         let genotypes = (0..size).map(|_| rng.gen::<G>()).collect();
         Population { genotypes: genotypes, ..Default::default() }
     }
-    pub fn next_generation<R: Rng>(&mut self, rng: &mut R, heat: f32) -> G {
+    pub fn next_generation<R: Rng>(&mut self, heat: f32, rng: &mut R) -> G {
         for genotype in self.genotypes.iter_mut() {
             genotype.calculate_fitness();
         }
@@ -48,10 +48,10 @@ impl<G: Genotype<G> + Clone + Rand> Population<G> {
         for genotype in self.genotypes.iter_mut().skip(self.elitism) {
             let parent_a = tournament_selection(&old, 4, rng);
             let parent_b = tournament_selection(&old, 4, rng);
-            let child = parent_a.crossover(rng, &parent_b);
+            let child = parent_a.crossover(&parent_b, rng);
 
             *genotype = if rng.gen_range(0.0, 1.0) < self.mutation_index {
-                child.mutated(rng, heat)
+                child.mutated(heat, rng)
             } else {
                 child
             };

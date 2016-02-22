@@ -1,7 +1,6 @@
 use palette::{Lab, Rgb};
 use palette::pixel::Srgb;
 use palette::Limited;
-use std::f32::consts::PI;
 
 #[allow(dead_code)]
 pub fn euclidean_distance(a: &Lab, b: &Lab) -> f32 {
@@ -74,14 +73,15 @@ pub fn print_col_dist(coldist: (&Lab, &Lab, f32)) {
 // http://colormine.org/delta-e-calculator/cmc
 
 pub fn ciede2000(lab1: &Lab, lab2: &Lab) -> f32 {
+    use std::f64::consts::PI;
     // ported from: https://github.com/THEjoezack/ColorMine/blob/master/ColorMine/ColorSpaces/Comparisons/CieDe2000Comparison.cs
 
-    let lab1l = lab1.l * 100.0;
-    let lab1a = lab1.a * 128.0;
-    let lab1b = lab1.b * 128.0;
-    let lab2l = lab2.l * 100.0;
-    let lab2a = lab2.a * 128.0;
-    let lab2b = lab2.b * 128.0;
+    let lab1l = (lab1.l * 100.0) as f64;
+    let lab1a = (lab1.a * 128.0) as f64;
+    let lab1b = (lab1.b * 128.0) as f64;
+    let lab2l = (lab2.l * 100.0) as f64;
+    let lab2a = (lab2.a * 128.0) as f64;
+    let lab2b = (lab2.b * 128.0) as f64;
 
     // Set weighting factors to 1
     let k_l = 1.0;
@@ -174,7 +174,7 @@ pub fn ciede2000(lab1: &Lab, lab2: &Lab) -> f32 {
                      r_t * delta_c_prime_div_k_c_s_c * delta_h_prime_div_k_h_s_h)
                         .sqrt();
 
-    return ciede2000;
+    return ciede2000 as f32;
 }
 
 #[cfg(test)]

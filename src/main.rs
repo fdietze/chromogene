@@ -189,7 +189,7 @@ impl Genotype<ColorScheme> for ColorScheme {
         self.fitness
     }
 
-    fn mutated<R: Rng>(&self, mut rng: &mut R, heat: f32) -> ColorScheme {
+    fn mutated<R: Rng>(&self, heat: f32, mut rng: &mut R) -> ColorScheme {
         let distribution = Normal::new(0.0, 0.15);
         let mut mutated_free = self.free_colors.clone();
         for _ in 0..mutated_free.len() / 4 {
@@ -207,7 +207,7 @@ impl Genotype<ColorScheme> for ColorScheme {
         ColorScheme { free_colors: mutated_free, ..Default::default() }
     }
 
-    fn crossover<R: Rng>(&self, rng: &mut R, other: &ColorScheme) -> ColorScheme {
+    fn crossover<R: Rng>(&self, other: &ColorScheme, rng: &mut R) -> ColorScheme {
         let mut sorted_a = self.free_colors.clone();
         sorted_a.sort_by_key(|&col| {
             let lch: Lch = col.into();
@@ -229,15 +229,15 @@ impl Genotype<ColorScheme> for ColorScheme {
 }
 
 fn main() {
-    let generations = 4000;
-    let population_size = 1000;
+    let generations = 100;
+    let population_size = 100;
 
     let mut rng = thread_rng();
     let mut p: Population<ColorScheme> = Population::new(population_size, &mut rng);
     let mut latest: Option<ColorScheme> = None;
     for i in 0..generations {
         let heat = 0.5; //(1.0 - i as f32 / generations as f32).powi(2);
-        let best = p.next_generation(&mut rng, heat);
+        let best = p.next_generation(heat, &mut rng);
         best.preview();
         println!("{:04}: best fitness: {:11.5}, heat: {:5.3}\n",
                  i,
