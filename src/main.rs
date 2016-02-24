@@ -10,6 +10,7 @@ use palette::pixel::Srgb;
 
 use rand::{thread_rng, Rng, Rand};
 use rand::distributions::{Normal, IndependentSample};
+use rand::distributions::exponential::Exp1;
 
 mod genetic;
 use genetic::{Population, Genotype};
@@ -229,21 +230,42 @@ impl Genotype<ColorScheme> for ColorScheme {
 }
 
 fn main() {
-    let generations = 100;
-    let population_size = 100;
-
     let mut rng = thread_rng();
-    let mut p: Population<ColorScheme> = Population::new(population_size, &mut rng);
-    let mut latest: Option<ColorScheme> = None;
-    for i in 0..generations {
-        let heat = 0.5; //(1.0 - i as f32 / generations as f32).powi(2);
-        let best = p.next_generation(heat, &mut rng);
-        best.preview();
-        println!("{:04}: best fitness: {:11.5}, heat: {:5.3}\n",
-                 i,
-                 best.fitness_print(false),
-                 heat);
-        latest = Some(best);
+    let alpha = 0.5;
+    // let distribution = Exp::new(1.0);
+
+    let scale = 10;
+    let samples = 1000000;
+    let mut v = vec![0.0; scale];
+    for _ in 0..samples {
+        let Exp1(e) = rng.gen::<Exp1>();
+        let p = (1.0 - (-e).exp()).powf(1.0 / alpha);
+        let x = (p * scale as f64) as usize;
+        v[x] += 1.0 / (samples as f64);
     }
+
+    for x in v {
+        println!("{:.3},", x);
+    }
+
+
+
+
+    // let generations = 100;
+    // let population_size = 100;
+
+    // let mut rng = thread_rng();
+    // let mut p: Population<ColorScheme> = Population::new(population_size, &mut rng);
+    // let mut latest: Option<ColorScheme> = None;
+    // for i in 0..generations {
+    // let heat = 0.5; //(1.0 - i as f32 / generations as f32).powi(2);
+    // let best = p.next_generation(heat, &mut rng);
+    // best.preview();
+    // println!("{:04}: best fitness: {:11.5}, heat: {:5.3}\n",
+    //          i,
+    //          best.fitness_print(false),
+    //          heat);
+    // latest = Some(best);
+    // }
     // latest.unwrap().fitness_print(true);
 }
