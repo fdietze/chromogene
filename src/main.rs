@@ -1,3 +1,5 @@
+#![allow(warnings)]
+
 extern crate palette;
 extern crate rand;
 #[macro_use]
@@ -13,7 +15,10 @@ use rand::distributions::{Normal, IndependentSample};
 use rand::distributions::exponential::Exp1;
 
 mod genetic;
-use genetic::{Population, Genotype};
+use genetic::{Population, Genotype, power_mutation, avg_var};
+
+mod rand_power;
+use rand_power::Power;
 
 #[macro_use]
 mod color;
@@ -56,10 +61,19 @@ impl ColorScheme {
         println!("");
     }
     fn fitness_print(&self, print: bool) -> f32 {
+
+        fn simulate_color_space(col: &Lab) -> Lab {
+            let mut rgb: Rgb = (*col).into();
+            rgb.clamp_self();
+            rgb.into()
+        }
+
         // fn convert_to_desired
         fn distance(col1: &Lab, col2: &Lab) -> f32 {
+            let col1 = simulate_color_space(&col1);
+            let col2 = simulate_color_space(&col2);
             // euclidean_distance(col1, col2)
-            ciede2000(col1, col2)
+            ciede2000(&col1, &col2)
         };
 
         let fixed_free_dist: Vec<(&Lab, &Lab, f32)> = FIXED_COLORS.iter()
@@ -149,21 +163,29 @@ impl ColorScheme {
             }
             println!("min fixed distance: {:7.2}", min_fixed_dist);
             println!("avg fixed distance: {:7.2}", avg_fixed_dist);
-            println!("var fixed distance: {:7.2}", var_fixed_dist);
+            println!("sd  fixed distance: {:7.2}", var_fixed_dist.sqrt());
             for &coldist in free_dist.iter() {
                 print_col_dist(coldist);
             }
             println!("min free distance : {:7.2}", min_free_dist);
             println!("avg free distance : {:7.2}", avg_free_dist);
-            println!("var free distance : {:7.2}", var_free_dist);
+            println!("sd  free distance : {:7.2}", var_free_dist.sqrt());
             println!("avg free chroma   : {:7.2}", avg_chroma);
-            println!("var free chroma   : {:7.2}", var_chroma);
+            println!("sd  free chroma   : {:7.2}", var_chroma.sqrt());
             println!("avg free luminance: {:7.2}", avg_luminance);
-            println!("var free luminance: {:7.2}", var_luminance);
+            println!("sd  free luminance: {:7.2}", var_luminance.sqrt());
         }
 
-        // fitness
-        -var_fixed_dist * 2.0 - var_luminance.powi(2) - var_chroma + min_free_dist.powi(2)
+        let mut fitness = 0.0;
+        fitness += min_free_dist.powi(2) * 6.0;
+        fitness += avg_free_dist;
+        fitness += min_fixed_dist.powi(2) * 6.0;
+        fitness += avg_fixed_dist;
+        fitness += -var_fixed_dist * 2.0;
+        fitness += -var_luminance.powi(2);
+        fitness += -var_chroma * 3.0;
+
+        fitness
     }
 }
 
@@ -190,20 +212,32 @@ impl Genotype<ColorScheme> for ColorScheme {
         self.fitness
     }
 
-    fn mutated<R: Rng>(&self, heat: f32, mut rng: &mut R) -> ColorScheme {
-        let distribution = Normal::new(0.0, 0.15);
-        let mut mutated_free = self.free_colors.clone();
-        for _ in 0..mutated_free.len() / 4 {
-            let index = rng.gen_range(0, mutated_free.len());
-            let diff = Lab::new(distribution.ind_sample(&mut rng) as f32 * heat,
-                                distribution.ind_sample(&mut rng) as f32 * heat,
-                                distribution.ind_sample(&mut rng) as f32 * heat);
-            let mut lab = mutated_free[index] + diff;
-            lab.clamp_self();
-            let mut rgb: Rgb = lab.into();
-            rgb.clamp_self();
-            mutated_free[index] = rgb.into();
-        }
+    fn mutated<R: Rng>(&self, strength: f32, mut rng: &mut R) -> ColorScheme {
+        // let power_distribution = Power::new(0.012); // TODO: use strength
+        let normal_distribution = Normal::new(0.0, 0.02 * strength as f64);
+        let mut mutate = |x: f32, lower, upper| -> f32 {
+            // power_mutation(&power_distribution,
+            //                x as f64,
+            //                lower as f64,
+            //                upper as f64,
+            //                rng) as f32
+            let diff = normal_distribution.ind_sample(&mut rng) as f32;
+            (x + diff).min(upper).max(lower)
+        };
+
+
+        let mutated_free = self.free_colors
+                               .iter()
+                               .map(|old| {
+                                   let new = Lab::new(mutate(old.l, 0.0, 1.0),
+                                                      mutate(old.a, -1.0, 1.0),
+                                                      mutate(old.b, -1.0, 1.0));
+                                   assert!(new.l >= 0.0 && new.l <= 1.0);
+                                   assert!(new.a >= -1.0 && new.a <= 1.0);
+                                   assert!(new.b >= -1.0 && new.b <= 1.0);
+                                   new
+                               })
+                               .collect();
 
         ColorScheme { free_colors: mutated_free, ..Default::default() }
     }
@@ -230,42 +264,46 @@ impl Genotype<ColorScheme> for ColorScheme {
 }
 
 fn main() {
-    let mut rng = thread_rng();
-    let alpha = 0.5;
-    // let distribution = Exp::new(1.0);
+    let generations = 1000;
+    let population_size = 50;
+    let runs = 1;
 
-    let scale = 10;
-    let samples = 1000000;
-    let mut v = vec![0.0; scale];
-    for _ in 0..samples {
-        let Exp1(e) = rng.gen::<Exp1>();
-        let p = (1.0 - (-e).exp()).powf(1.0 / alpha);
-        let x = (p * scale as f64) as usize;
-        v[x] += 1.0 / (samples as f64);
+    // benchmark parameters:
+    // let generations = 500;
+    // let population_size = 50;
+    // let runs = 20;
+
+    let mut results = vec![0.0;runs];
+    for run in 0..runs {
+        let mut rng = thread_rng();
+        let mut p: Population<ColorScheme> = Population::new(population_size, &mut rng);
+
+        let mut latest: Option<ColorScheme> = None;
+        for i in 0..generations {
+            let heat = (1.0 - i as f32 / generations as f32).powi(1);
+            let stats = p.next_generation(heat, &mut rng);
+
+            if i % (generations / 100) == 0 {
+                stats.0.preview();
+                println!("{:04}: best fitness: {:11.5}, avg: {:6.2}, sd: {:6.2}  heat: {:5.3}\n",
+                         i,
+                         stats.0.fitness_print(false),
+                         stats.1,
+                         stats.2.sqrt(),
+                         heat);
+            }
+
+            latest = Some(stats.0);
+        }
+        let best = latest.unwrap();
+        best.preview();
+        results[run] = best.fitness();
+        println!("{:8.3}", results[run]);
+        best.fitness_print(true);
     }
-
-    for x in v {
-        println!("{:.3},", x);
-    }
-
-
-
-
-    // let generations = 100;
-    // let population_size = 100;
-
-    // let mut rng = thread_rng();
-    // let mut p: Population<ColorScheme> = Population::new(population_size, &mut rng);
-    // let mut latest: Option<ColorScheme> = None;
-    // for i in 0..generations {
-    // let heat = 0.5; //(1.0 - i as f32 / generations as f32).powi(2);
-    // let best = p.next_generation(heat, &mut rng);
-    // best.preview();
-    // println!("{:04}: best fitness: {:11.5}, heat: {:5.3}\n",
-    //          i,
-    //          best.fitness_print(false),
-    //          heat);
-    // latest = Some(best);
-    // }
-    // latest.unwrap().fitness_print(true);
+    let (avg, var) = avg_var(&results);
+    println!("\nbest: {:8.3}\navg:  {:8.3}\nsd:   {:8.3}",
+             results.iter().fold(std::f32::MIN, |max, &x| max.max(x)),
+             avg,
+             var.sqrt());
 }

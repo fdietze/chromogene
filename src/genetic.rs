@@ -1,5 +1,7 @@
 use rand::{Rng, Rand};
 use std::cmp::Ordering;
+use rand_power::Power;
+use rand::distributions::IndependentSample;
 
 pub trait Genotype<G:Genotype<G> + Clone + Rand> {
     fn fitness(&self) -> f32;
@@ -18,7 +20,7 @@ impl<G: Genotype<G> + Clone + Rand> Default for Population<G> {
     fn default() -> Population<G> {
         Population {
             genotypes: vec![],
-            mutation_index: 0.25,
+            mutation_index: 1.0,
             elitism: 1,
         }
     }
@@ -29,10 +31,16 @@ impl<G: Genotype<G> + Clone + Rand> Population<G> {
         let genotypes = (0..size).map(|_| rng.gen::<G>()).collect();
         Population { genotypes: genotypes, ..Default::default() }
     }
-    pub fn next_generation<R: Rng>(&mut self, heat: f32, rng: &mut R) -> G {
+    pub fn next_generation<R: Rng>(&mut self,
+                                   mutation_strength: f32,
+                                   rng: &mut R)
+                                   -> (G, f32, f32) {
         for genotype in self.genotypes.iter_mut() {
             genotype.calculate_fitness();
         }
+
+        let fitnesses = self.genotypes.iter().map(|g| g.fitness()).collect();
+        let (avg, var) = avg_var(&fitnesses);
 
         self.genotypes.sort_by(|geno_a, geno_b| {
             if geno_a.fitness() > geno_b.fitness() {
@@ -45,21 +53,27 @@ impl<G: Genotype<G> + Clone + Rand> Population<G> {
         });
 
         let old = self.genotypes.clone();
-        for genotype in self.genotypes.iter_mut().skip(self.elitism) {
+        let best = old[0].clone();
+
+        let mutation_count = (self.mutation_index * self.genotypes.len() as f32).ceil() as usize;
+
+        for (i, genotype) in self.genotypes.iter_mut().skip(self.elitism).enumerate() {
             let parent_a = tournament_selection(&old, 4, rng);
             let parent_b = tournament_selection(&old, 4, rng);
             let child = parent_a.crossover(&parent_b, rng);
+            // let child = parent_a.clone();
 
-            *genotype = if rng.gen_range(0.0, 1.0) < self.mutation_index {
-                child.mutated(heat, rng)
+            let child = if i < mutation_count {
+                child.mutated(mutation_strength, rng)
             } else {
                 child
             };
+
+            *genotype = child;
         }
 
 
-        let best = old[0].clone();
-        best
+        (best, avg, var)
     }
 }
 
@@ -79,6 +93,34 @@ fn tournament_selection<'a, G: Genotype<G> + Clone + Rand, R: Rng>(genotypes: &'
     })
 }
 
+pub fn power_mutation<R: Rng>(power_distribution: &Power,
+                              current_value: f64,
+                              lower_bound: f64,
+                              upper_bound: f64,
+                              mut rng: &mut R)
+                              -> f64 {
+    // from: A new mutation operator for real coded genetic algorithms (Deep, Thakur)
+    let t = (current_value - lower_bound) / (upper_bound - lower_bound);
+    // println!("current: {}", current_value);
+    // println!("lower: {}", lower_bound);
+    // println!("upper: {}", upper_bound);
+    let r = rng.gen_range(0.0, 1.0);
+    let s = power_distribution.ind_sample(&mut rng);
+
+    // println!("t: {}", t);
+    // println!("r: {}, s: {}", r, s);
+
+    let y = if t < r {
+        current_value - s * (current_value - lower_bound)
+    } else {
+        current_value + s * (upper_bound - current_value)
+    };
+
+    // println!("y: {}", y);
+
+    y
+}
+
 #[allow(dead_code)]
 fn roulette_wheel_selection(cumulative_fitness: &Vec<f32>, rand: f32) -> usize {
     cumulative_fitness.binary_search_by(|probe| {
@@ -90,6 +132,19 @@ fn roulette_wheel_selection(cumulative_fitness: &Vec<f32>, rand: f32) -> usize {
                       })
                       .unwrap_err()
 }
+
+
+pub fn avg_var(values: &Vec<f32>) -> (f32, f32) {
+    let avg = values.iter()
+                    .fold(0.0, |sum, x| sum + x) / values.len() as f32;
+
+    let var = values.iter()
+                    .map(|&value| (value - avg).powi(2))
+                    .fold(0.0, |sum, x| sum + x) / values.len() as f32;
+
+    (avg, var)
+}
+
 
 #[cfg(test)]
 mod test {
