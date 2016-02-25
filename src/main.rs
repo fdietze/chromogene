@@ -4,6 +4,7 @@ extern crate palette;
 extern crate rand;
 #[macro_use]
 extern crate lazy_static;
+extern crate stats;
 
 use palette::{Lab, Lch, Rgb};
 use std::ops::Add;
@@ -14,11 +15,10 @@ use rand::{thread_rng, Rng, Rand};
 use rand::distributions::{Normal, IndependentSample};
 use rand::distributions::exponential::Exp1;
 
-mod genetic;
-use genetic::{Population, Genotype, power_mutation, avg_var};
+use stats::{stddev, mean};
 
-mod rand_power;
-use rand_power::Power;
+mod genetic;
+use genetic::{Population, Genotype};
 
 #[macro_use]
 mod color;
@@ -35,6 +35,20 @@ lazy_static! {
     static ref FIXED_COLORS: [Lab; 2] = [srgb!(0, 43, 54), srgb!(253, 246, 227)];
 }
 const FREE_COLOR_COUNT: usize = 8;
+
+fn simulate_color_space(col: &Lab) -> Lab {
+    let mut rgb: Rgb = (*col).into();
+    rgb.clamp_self();
+    rgb.into()
+}
+
+// fn convert_to_desired
+fn distance(col1: &Lab, col2: &Lab) -> f32 {
+    let col1 = simulate_color_space(&col1);
+    let col2 = simulate_color_space(&col2);
+    // euclidean_distance(col1, col2)
+    ciede2000(&col1, &col2)
+}
 
 impl ColorScheme {
     pub fn preview(&self) {
@@ -62,20 +76,6 @@ impl ColorScheme {
     }
     fn fitness_print(&self, print: bool) -> f32 {
 
-        fn simulate_color_space(col: &Lab) -> Lab {
-            let mut rgb: Rgb = (*col).into();
-            rgb.clamp_self();
-            rgb.into()
-        }
-
-        // fn convert_to_desired
-        fn distance(col1: &Lab, col2: &Lab) -> f32 {
-            let col1 = simulate_color_space(&col1);
-            let col2 = simulate_color_space(&col2);
-            // euclidean_distance(col1, col2)
-            ciede2000(&col1, &col2)
-        };
-
         let fixed_free_dist: Vec<(&Lab, &Lab, f32)> = FIXED_COLORS.iter()
                                                                   .flat_map(|col1| {
                                                                       self.free_colors
@@ -101,25 +101,11 @@ impl ColorScheme {
                                                     })
                                                     .collect();
 
-        let avg_free_dist = free_dist.iter()
-                                     .map(|&(_, _, dist)| dist)
-                                     .fold(0.0, |sum, x| sum + x) /
-                            free_dist.len() as f32;
+        let mean_free_dist = mean(free_dist.iter().map(|&(_, _, dist)| dist)) as f32;
+        let sd_free_dist = stddev(free_dist.iter().map(|&(_, _, dist)| dist)) as f32;
 
-        let avg_fixed_dist = fixed_free_dist.iter()
-                                            .map(|&(_, _, dist)| dist)
-                                            .fold(0.0, |sum, x| sum + x) /
-                             fixed_free_dist.len() as f32;
-
-        let var_free_dist = free_dist.iter()
-                                     .map(|&(_, _, dist)| (dist - avg_free_dist).powi(2))
-                                     .fold(0.0, |sum, x| sum + x) /
-                            free_dist.len() as f32;
-
-        let var_fixed_dist = fixed_free_dist.iter()
-                                            .map(|&(_, _, dist)| (dist - avg_fixed_dist).powi(2))
-                                            .fold(0.0, |sum, x| sum + x) /
-                             fixed_free_dist.len() as f32;
+        let mean_fixed_dist = mean(fixed_free_dist.iter().map(|&(_, _, dist)| dist)) as f32;
+        let sd_fixed_dist = stddev(fixed_free_dist.iter().map(|&(_, _, dist)| dist)) as f32;
 
         let min_free_dist = free_dist.iter()
                                      .map(|&(_, _, dist)| dist)
@@ -129,61 +115,44 @@ impl ColorScheme {
                                             .map(|&(_, _, dist)| dist)
                                             .fold(std::f32::MAX, |min, x| min.min(x));
 
-        let avg_chroma = self.free_colors
-                             .iter()
-                             .map(|&col| {
-                                 let lch: Lch = col.into();
-                                 lch.chroma * 128.0
-                             })
-                             .fold(0.0, |sum, x| sum + x) /
-                         self.free_colors.len() as f32;
-        let var_chroma = self.free_colors
-                             .iter()
-                             .map(|&col| {
-                                 let lch: Lch = col.into();
-                                 (lch.chroma * 128.0 - avg_chroma).powi(2)
-                             })
-                             .fold(0.0, |sum, x| sum + x) /
-                         self.free_colors.len() as f32;
+        let mean_chroma = mean(self.free_colors.iter().map(|&col| {
+            let lch: Lch = col.into();
+            lch.chroma * 128.0
+        })) as f32;
+        let sd_chroma = stddev(self.free_colors.iter().map(|&col| {
+            let lch: Lch = col.into();
+            lch.chroma * 128.0
+        })) as f32;
 
-        let avg_luminance = self.free_colors
-                                .iter()
-                                .map(|&col| col.l * 100.0)
-                                .fold(0.0, |sum, x| sum + x) /
-                            self.free_colors.len() as f32;
-        let var_luminance = self.free_colors
-                                .iter()
-                                .map(|&col| (col.l * 100.0 - avg_luminance).powi(2))
-                                .fold(0.0, |sum, x| sum + x) /
-                            self.free_colors.len() as f32;
-
+        let mean_luminance = mean(self.free_colors.iter().map(|&col| col.l * 100.0)) as f32;
+        let sd_luminance = stddev(self.free_colors.iter().map(|&col| col.l * 100.0)) as f32;
         if print {
             for &coldist in fixed_free_dist.iter() {
                 print_col_dist(coldist);
             }
-            println!("min fixed distance: {:7.2}", min_fixed_dist);
-            println!("avg fixed distance: {:7.2}", avg_fixed_dist);
-            println!("sd  fixed distance: {:7.2}", var_fixed_dist.sqrt());
+            println!("min  fixed distance: {:7.2}", min_fixed_dist);
+            println!("mean fixed distance: {:7.2}", mean_fixed_dist);
+            println!("sd   fixed distance: {:7.2}", sd_fixed_dist);
             for &coldist in free_dist.iter() {
                 print_col_dist(coldist);
             }
-            println!("min free distance : {:7.2}", min_free_dist);
-            println!("avg free distance : {:7.2}", avg_free_dist);
-            println!("sd  free distance : {:7.2}", var_free_dist.sqrt());
-            println!("avg free chroma   : {:7.2}", avg_chroma);
-            println!("sd  free chroma   : {:7.2}", var_chroma.sqrt());
-            println!("avg free luminance: {:7.2}", avg_luminance);
-            println!("sd  free luminance: {:7.2}", var_luminance.sqrt());
+            println!("min  free distance : {:7.2}", min_free_dist);
+            println!("mean free distance : {:7.2}", mean_free_dist);
+            println!("sd   free distance : {:7.2}", sd_free_dist);
+            println!("mean free chroma   : {:7.2}", mean_chroma);
+            println!("sd   free chroma   : {:7.2}", sd_chroma);
+            println!("mean free luminance: {:7.2}", mean_luminance);
+            println!("sd   free luminance: {:7.2}", sd_luminance);
         }
 
         let mut fitness = 0.0;
         fitness += min_free_dist.powi(2) * 6.0;
-        fitness += avg_free_dist;
+        fitness += mean_free_dist;
         fitness += min_fixed_dist.powi(2) * 6.0;
-        fitness += avg_fixed_dist;
-        fitness += -var_fixed_dist * 2.0;
-        fitness += -var_luminance.powi(2);
-        fitness += -var_chroma * 3.0;
+        fitness += mean_fixed_dist;
+        fitness += -sd_fixed_dist.powi(2) * 2.0;
+        fitness += -sd_luminance.powi(4);
+        fitness += -sd_chroma.powi(2) * 3.0;
 
         fitness
     }
@@ -213,14 +182,8 @@ impl Genotype<ColorScheme> for ColorScheme {
     }
 
     fn mutated<R: Rng>(&self, strength: f32, mut rng: &mut R) -> ColorScheme {
-        // let power_distribution = Power::new(0.012); // TODO: use strength
         let normal_distribution = Normal::new(0.0, 0.02 * strength as f64);
         let mut mutate = |x: f32, lower, upper| -> f32 {
-            // power_mutation(&power_distribution,
-            //                x as f64,
-            //                lower as f64,
-            //                upper as f64,
-            //                rng) as f32
             let diff = normal_distribution.ind_sample(&mut rng) as f32;
             (x + diff).min(upper).max(lower)
         };
@@ -273,7 +236,8 @@ fn main() {
     // let population_size = 50;
     // let runs = 20;
 
-    let mut results = vec![0.0;runs];
+    let mut run_stats = stats::OnlineStats::new();
+    let mut run_minmax = stats::MinMax::new();
     for run in 0..runs {
         let mut rng = thread_rng();
         let mut p: Population<ColorScheme> = Population::new(population_size, &mut rng);
@@ -289,7 +253,7 @@ fn main() {
                          i,
                          stats.0.fitness_print(false),
                          stats.1,
-                         stats.2.sqrt(),
+                         stats.2,
                          heat);
             }
 
@@ -297,13 +261,13 @@ fn main() {
         }
         let best = latest.unwrap();
         best.preview();
-        results[run] = best.fitness();
-        println!("{:8.3}", results[run]);
+        run_stats.add(best.fitness());
+        run_minmax.add(best.fitness());
+        println!("{:8.3}", best.fitness());
         best.fitness_print(true);
     }
-    let (avg, var) = avg_var(&results);
     println!("\nbest: {:8.3}\navg:  {:8.3}\nsd:   {:8.3}",
-             results.iter().fold(std::f32::MIN, |max, &x| max.max(x)),
-             avg,
-             var.sqrt());
+             run_minmax.max().unwrap(),
+             run_stats.mean(),
+             run_stats.stddev());
 }

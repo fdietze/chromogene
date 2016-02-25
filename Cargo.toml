@@ -8,6 +8,9 @@ palette = "0.2"
 rand = "0.3"
 lazy_static = "0.1.*"
 
+[dependencies.streaming-stats]
+git = "git://github.com/BurntSushi/rust-stats"
+
 # The release profile, used for `cargo build --release`
 [profile.release]
 debug = false # enable for profiling

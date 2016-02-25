@@ -1,7 +1,7 @@
 use rand::{Rng, Rand};
 use std::cmp::Ordering;
-use rand_power::Power;
 use rand::distributions::IndependentSample;
+use stats::{stddev, mean};
 
 pub trait Genotype<G:Genotype<G> + Clone + Rand> {
     fn fitness(&self) -> f32;
@@ -38,9 +38,8 @@ impl<G: Genotype<G> + Clone + Rand> Population<G> {
         for genotype in self.genotypes.iter_mut() {
             genotype.calculate_fitness();
         }
-
-        let fitnesses = self.genotypes.iter().map(|g| g.fitness()).collect();
-        let (avg, var) = avg_var(&fitnesses);
+        let mean_fitness = mean(self.genotypes.iter().map(|g| g.fitness())) as f32;
+        let sd_fitness = stddev(self.genotypes.iter().map(|g| g.fitness())) as f32;
 
         self.genotypes.sort_by(|geno_a, geno_b| {
             if geno_a.fitness() > geno_b.fitness() {
@@ -73,7 +72,7 @@ impl<G: Genotype<G> + Clone + Rand> Population<G> {
         }
 
 
-        (best, avg, var)
+        (best, mean_fitness, sd_fitness)
     }
 }
 
@@ -91,75 +90,4 @@ fn tournament_selection<'a, G: Genotype<G> + Clone + Rand, R: Rng>(genotypes: &'
             best
         }
     })
-}
-
-pub fn power_mutation<R: Rng>(power_distribution: &Power,
-                              current_value: f64,
-                              lower_bound: f64,
-                              upper_bound: f64,
-                              mut rng: &mut R)
-                              -> f64 {
-    // from: A new mutation operator for real coded genetic algorithms (Deep, Thakur)
-    let t = (current_value - lower_bound) / (upper_bound - lower_bound);
-    // println!("current: {}", current_value);
-    // println!("lower: {}", lower_bound);
-    // println!("upper: {}", upper_bound);
-    let r = rng.gen_range(0.0, 1.0);
-    let s = power_distribution.ind_sample(&mut rng);
-
-    // println!("t: {}", t);
-    // println!("r: {}, s: {}", r, s);
-
-    let y = if t < r {
-        current_value - s * (current_value - lower_bound)
-    } else {
-        current_value + s * (upper_bound - current_value)
-    };
-
-    // println!("y: {}", y);
-
-    y
-}
-
-#[allow(dead_code)]
-fn roulette_wheel_selection(cumulative_fitness: &Vec<f32>, rand: f32) -> usize {
-    cumulative_fitness.binary_search_by(|probe| {
-                          if probe > &rand {
-                              Ordering::Greater
-                          } else {
-                              Ordering::Less
-                          }
-                      })
-                      .unwrap_err()
-}
-
-
-pub fn avg_var(values: &Vec<f32>) -> (f32, f32) {
-    let avg = values.iter()
-                    .fold(0.0, |sum, x| sum + x) / values.len() as f32;
-
-    let var = values.iter()
-                    .map(|&value| (value - avg).powi(2))
-                    .fold(0.0, |sum, x| sum + x) / values.len() as f32;
-
-    (avg, var)
-}
-
-
-#[cfg(test)]
-mod test {
-    use super::*;
-    use super::roulette_wheel_selection;
-
-    #[test]
-    fn roulette_wheel() {
-        let wheel = vec![13.0, 20.0, 21.0, 30.0, 35.0];
-        assert_eq!(roulette_wheel_selection(&wheel, 0.0), 0);
-        assert_eq!(roulette_wheel_selection(&wheel, 10.0), 0);
-        assert_eq!(roulette_wheel_selection(&wheel, 14.0), 1);
-        assert_eq!(roulette_wheel_selection(&wheel, 20.0), 2);
-        assert_eq!(roulette_wheel_selection(&wheel, 22.0), 3);
-        assert_eq!(roulette_wheel_selection(&wheel, 34.0), 4);
-        assert_eq!(roulette_wheel_selection(&wheel, 35.0), 5);
-    }
 }
