@@ -34,10 +34,26 @@ impl ColorScheme {
             }
             println!("");
         }
+
         println!("");
+        for fg in descr.fixed_colors.iter() {
+            for bg in self.free_colors.iter() {
+                print_colored_text(bg, fg, "delgmpgl ");
+            }
+            println!("");
+        }
+
+        // println!("");
+        // for bg in self.free_colors.iter() {
+        //     for fg in self.free_colors.iter() {
+        //         print_colored_text(bg, fg, "Spiegelei ");
+        //     }
+        //     println!("");
+        // }
+        // println!("");
     }
 
-    pub fn fitness_data(&self, def: &ColorSchemeProblemDescription) -> FitnessData {
+    pub fn fitness_data(&self, descr: &ColorSchemeProblemDescription) -> FitnessData {
         let chroma: Vec<f32> = self.free_colors
                                    .iter()
                                    .map(|&col| {
@@ -48,14 +64,14 @@ impl ColorScheme {
 
         let luminance: Vec<f32> = self.free_colors.iter().map(|&col| col.l * 100.0).collect();
 
-        let fixed_dist: Vec<f32> = def.fixed_colors
-                                      .iter()
-                                      .flat_map(|col1| {
-                                          self.free_colors
-                                              .iter()
-                                              .map(move |col2| distance(col1, col2))
-                                      })
-                                      .collect();
+        let fixed_dist: Vec<f32> = descr.fixed_colors
+                                        .iter()
+                                        .flat_map(|col1| {
+                                            self.free_colors
+                                                .iter()
+                                                .map(move |col2| distance(col1, col2))
+                                        })
+                                        .collect();
 
         let free_dist: Vec<f32> = self.free_colors
                                       .iter()
@@ -79,17 +95,17 @@ impl ColorScheme {
         data
     }
 
-    pub fn print_fitness(&self, def: &ColorSchemeProblemDescription) {
-        let fixed_dist: Vec<(&Lab, &Lab, f32)> = def.fixed_colors
-                                                    .iter()
-                                                    .flat_map(|col1| {
-                                                        self.free_colors
-                                                            .iter()
-                                                            .map(move |col2| {
-                                                                (col1, col2, distance(col1, col2))
-                                                            })
-                                                    })
-                                                    .collect();
+    pub fn print_fitness(&self, descr: &ColorSchemeProblemDescription) {
+        let fixed_dist: Vec<(&Lab, &Lab, f32)> = descr.fixed_colors
+                                                      .iter()
+                                                      .flat_map(|col1| {
+                                                          self.free_colors
+                                                              .iter()
+                                                              .map(move |col2| {
+                                                                  (col1, col2, distance(col1, col2))
+                                                              })
+                                                      })
+                                                      .collect();
 
         let free_dist: Vec<(&Lab, &Lab, f32)> = self.free_colors
                                                     .iter()
@@ -104,24 +120,26 @@ impl ColorScheme {
                                                     })
                                                     .collect();
 
-        for &coldist in fixed_dist.iter() {
-            print_col_dist(coldist);
-        }
+        // for &coldist in fixed_dist.iter() {
+        //     print_col_dist(coldist);
+        // }
 
-        // println!("min  fixed distance: {:7.2}", min_fixed_dist);
-        // println!("mean fixed distance: {:7.2}", mean_fixed_dist);
-        // println!("sd   fixed distance: {:7.2}", sd_fixed_dist);
-        for &coldist in free_dist.iter() {
-            print_col_dist(coldist);
-        }
+        // for &coldist in free_dist.iter() {
+        //     print_col_dist(coldist);
+        // }
 
-        // println!("min  free distance : {:7.2}", min_free_dist);
-        // println!("mean free distance : {:7.2}", mean_free_dist);
-        // println!("sd   free distance : {:7.2}", sd_free_dist);
-        // println!("mean free chroma   : {:7.2}", mean_chroma);
-        // println!("sd   free chroma   : {:7.2}", sd_chroma);
-        // println!("mean free luminance: {:7.2}", mean_luminance);
-        // println!("sd   free luminance: {:7.2}", sd_luminance);
+        let data = self.fitness_data(&descr);
+        for t in descr.fitness_targets.iter() {
+            println!("{:30?} {:?} {:?} ( {:.3} *{})^{} = {:.3}",
+                     t.direction,
+                     t.stat,
+                     t.parameter,
+                     t.value(&data),
+                     t.strength.factor,
+                     t.strength.exponent,
+                     t.calculate(&data),
+                     );
+        }
     }
 }
 

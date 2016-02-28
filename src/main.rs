@@ -1,5 +1,7 @@
 #![allow(warnings)]
+
 #![feature(iter_arith)]
+#![feature(custom_derive)]
 
 extern crate palette;
 extern crate rand;
@@ -43,21 +45,23 @@ use colorscheme::ColorScheme;
 
 fn main() {
     let descr = ColorSchemeProblemDescription {
-        free_color_count: 8,
-        fixed_colors: vec![srgb!(0, 43, 54), srgb!(253, 246, 227)],
+        free_color_count: 6,
+        // fixed_colors: vec![srgb!(0, 43, 54), srgb!(253, 246, 227)],
+        // fixed_colors: vec![srgb!(51, 51, 51)],
+        fixed_colors: vec![srgb!(255,255,255)],
         fitness_targets: vec![
-            Target::new(Maximize, Min, FreeDistance, Strength { factor: 1.0, exponent: 2 }),
-            // Target::new(FreeDistance, Mean, Strength { factor: 1.0, exponent: 1}),
-            Target::new(Maximize, Min, FixedDistance, Strength { factor: 1.0, exponent: 1}),
-            // Target::new(FixedDistance, Mean,Strength { factor: 1.0, exponent: 1}),
-            Target::new(Minimize, StdDev, FixedDistance, Strength { factor: -2.0, exponent: 1}),
-            Target::new(Minimize, StdDev, Luminance, Strength { factor: -1.0, exponent: 4}),
+            Target::new(MinimizeDifference(33.0), Min, FreeDistance, Strength { factor: 1.0, exponent: 2 }),
+            Target::new(Minimize, StdDev, FreeDistance, Strength { factor: 1.0, exponent: 2}),
+            Target::new(MinimizeDifference(30.0), Min, FixedDistance, Strength { factor: 1.0, exponent: 2 }),
+            Target::new(Minimize, StdDev, FixedDistance, Strength { factor: 1.0, exponent: 2}),
+            Target::new(Minimize, StdDev, Luminance, Strength { factor: 1.0, exponent: 2}),
             Target::new(Minimize, StdDev, Chroma, Strength { factor: 1.0, exponent: 2}),
+            Target::new(Maximize, Mean, Chroma, Strength { factor: 1.0, exponent: 1}),
         ],
     };
 
-    let generations = 200;
-    let population_size = 100;
+    let generations = 1000;
+    let population_size = 200;
     let runs = 1;
 
     // benchmark parameters:
@@ -79,6 +83,7 @@ fn main() {
 
             if generations < 100 || i % (generations / 100) == 0 {
                 stats.0.preview(&descr);
+                stats.0.print_fitness(&descr);
                 println!("{:04}: best fitness: {:11.5}, avg: {:6.2}, sd: {:6.2}  heat: {:5.3}\n",
                          i,
                          stats.0.get_fitness(),

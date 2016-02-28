@@ -20,7 +20,7 @@ impl ProblemDescription<ColorScheme, ColorSchemeProblemDescription> for ColorSch
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Hash)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub enum Parameter {
     Chroma,
     Luminance,
@@ -33,13 +33,13 @@ pub type FitnessData = HashMap<Parameter, StatValues>;
 
 #[derive(Clone)]
 pub struct Target {
-    direction: TargetDirection,
-    stat: Stat,
-    parameter: Parameter,
-    strength: Strength,
+    pub direction: TargetDirection,
+    pub stat: Stat,
+    pub parameter: Parameter,
+    pub strength: Strength,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum TargetDirection {
     Maximize,
     Minimize,
@@ -63,8 +63,11 @@ impl Target {
 }
 
 impl Target {
-    fn calculate(&self, data: &FitnessData) -> f32 {
-        let value = data.get(&self.parameter).unwrap().get(&self.stat);
+    pub fn value(&self, data: &FitnessData) -> f32 {
+        data.get(&self.parameter).unwrap().get(&self.stat)
+    }
+    pub fn calculate(&self, data: &FitnessData) -> f32 {
+        let value = self.value(&data);
         match self.direction {
             TargetDirection::Maximize => self.strength.calculate(value),
             TargetDirection::Minimize => -self.strength.calculate(value),
@@ -91,7 +94,7 @@ impl Strength {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Stat {
     Mean,
     StdDev,
