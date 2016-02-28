@@ -3,48 +3,52 @@ use std::cmp::Ordering;
 use rand::distributions::IndependentSample;
 use stats::{stddev, mean};
 
-pub trait Genotype<G:Genotype<G> + Clone + Rand> {
-    fn fitness(&self) -> f32;
-    fn calculate_fitness(&mut self);
+pub trait Genotype<G:Genotype<G, P> + Clone, P: ProblemDescription<G, P>> {
+    fn rand<R: Rng>(descr: &P, rng: &mut R) -> G;
     fn mutated<R: Rng>(&self, strength: f32, rng: &mut R) -> G;
     fn crossover<R: Rng>(&self, other: &G, rng: &mut R) -> G;
+
+    fn get_fitness(&self) -> f32;
+    fn set_fitness(&mut self, fitness: f32);
 }
 
-pub struct Population<G: Genotype<G> + Clone + Rand> {
+pub trait ProblemDescription<G:Genotype<G, P> + Clone, P: ProblemDescription<G, P>> {
+    fn calculate_fitness(&self, genotype: &G) -> f32;
+}
+
+pub struct Population<G: Genotype<G, P> + Clone, P: ProblemDescription<G, P>> {
     pub genotypes: Vec<G>,
     pub mutation_index: f32,
     pub elitism: usize,
+    pub problem_description: P,
 }
 
-impl<G: Genotype<G> + Clone + Rand> Default for Population<G> {
-    fn default() -> Population<G> {
+impl<G: Genotype<G, P> + Clone, P: ProblemDescription<G, P>> Population<G, P> {
+    pub fn new<R: Rng>(size: usize, problem_description: P, mut rng: &mut R) -> Population<G, P> {
+        let genotypes = (0..size).map(|_| G::rand(&problem_description, &mut rng)).collect();
         Population {
-            genotypes: vec![],
+            genotypes: genotypes,
+            problem_description: problem_description,
             mutation_index: 1.0,
             elitism: 1,
         }
-    }
-}
-
-impl<G: Genotype<G> + Clone + Rand> Population<G> {
-    pub fn new<R: Rng>(size: usize, rng: &mut R) -> Population<G> {
-        let genotypes = (0..size).map(|_| rng.gen::<G>()).collect();
-        Population { genotypes: genotypes, ..Default::default() }
     }
     pub fn next_generation<R: Rng>(&mut self,
                                    mutation_strength: f32,
                                    rng: &mut R)
                                    -> (G, f32, f32) {
         for genotype in self.genotypes.iter_mut() {
-            genotype.calculate_fitness();
+            let fitness = self.problem_description.calculate_fitness(&genotype);
+            genotype.set_fitness(fitness);
         }
-        let mean_fitness = mean(self.genotypes.iter().map(|g| g.fitness())) as f32;
-        let sd_fitness = stddev(self.genotypes.iter().map(|g| g.fitness())) as f32;
+
+        let mean_fitness = mean(self.genotypes.iter().map(|g| g.get_fitness())) as f32;
+        let sd_fitness = stddev(self.genotypes.iter().map(|g| g.get_fitness())) as f32;
 
         self.genotypes.sort_by(|geno_a, geno_b| {
-            if geno_a.fitness() > geno_b.fitness() {
+            if geno_a.get_fitness() > geno_b.get_fitness() {
                 Ordering::Less
-            } else if geno_a.fitness() < geno_b.fitness() {
+            } else if geno_a.get_fitness() < geno_b.get_fitness() {
                 Ordering::Greater
             } else {
                 Ordering::Equal
@@ -77,14 +81,15 @@ impl<G: Genotype<G> + Clone + Rand> Population<G> {
 }
 
 #[allow(dead_code)]
-fn tournament_selection<'a, G: Genotype<G> + Clone + Rand, R: Rng>(genotypes: &'a Vec<G>,
-                                                                   size: usize,
-                                                                   rng: &mut R)
-                                                                   -> &'a G {
+fn tournament_selection<'a, G: Genotype<G, P> + Clone, P: ProblemDescription<G, P>, R: Rng>
+    (genotypes: &'a Vec<G>,
+     size: usize,
+     rng: &mut R)
+     -> &'a G {
     assert!(size >= 1);
     (0..size).fold(rng.choose(genotypes).unwrap(), |best, _| {
         let competitor = rng.choose(genotypes).unwrap();
-        if competitor.fitness() > best.fitness() {
+        if competitor.get_fitness() > best.get_fitness() {
             competitor
         } else {
             best

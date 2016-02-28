@@ -2,6 +2,23 @@ use palette::{Lab, Rgb};
 use palette::pixel::Srgb;
 use palette::Limited;
 
+pub fn adjust_color_space(col: &Lab) -> Lab {
+    clamp_to_rgb(col)
+}
+
+fn clamp_to_rgb(col: &Lab) -> Lab {
+    let mut rgb: Rgb = (*col).into();
+    rgb.clamp_self();
+    rgb.into()
+}
+
+pub fn distance(col1: &Lab, col2: &Lab) -> f32 {
+    let col1 = adjust_color_space(&col1);
+    let col2 = adjust_color_space(&col2);
+    // euclidean_distance(col1, col2)
+    ciede2000(&col1, &col2)
+}
+
 #[allow(dead_code)]
 pub fn euclidean_distance(a: &Lab, b: &Lab) -> f32 {
     (((a.l - b.l) * 100.0).powi(2) + ((a.a - b.a) * 128.0).powi(2) + ((a.b - b.b) * 128.0).powi(2))
