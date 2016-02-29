@@ -30,18 +30,26 @@ impl ColorScheme {
         println!("");
         for bg in descr.fixed_colors.iter() {
             for fg in self.free_colors.iter() {
-                print_colored_text(bg, fg, "delgmpgl ");
+                print_colored_text(bg, fg, "          ");
+            }
+            println!("");
+            for fg in self.free_colors.iter() {
+                print_colored_text(bg, fg, " delgmpgl ");
+            }
+            println!("");
+            for fg in self.free_colors.iter() {
+                print_colored_text(bg, fg, "          ");
             }
             println!("");
         }
 
         println!("");
-        for fg in descr.fixed_colors.iter() {
-            for bg in self.free_colors.iter() {
-                print_colored_text(bg, fg, "delgmpgl ");
-            }
-            println!("");
-        }
+        // for fg in descr.fixed_colors.iter() {
+        //     for bg in self.free_colors.iter() {
+        //         print_colored_text(bg, fg, "delgmpgl ");
+        //     }
+        //     println!("");
+        // }
 
         // println!("");
         // for bg in self.free_colors.iter() {
@@ -129,11 +137,11 @@ impl ColorScheme {
         // }
 
         let data = self.fitness_data(&descr);
-        for t in descr.fitness_targets.iter() {
-            println!("{:30?} {:?} {:?} ( {:.3} *{})^{} = {:.3}",
-                     t.direction,
-                     t.stat,
-                     t.parameter,
+        for t in descr.fitness_targets.values() {
+            println!("{: <23} {: <6} {: <13} ( {:8.3} *{})^{} = {:11.3}",
+                     format!("{:?}",t.direction),
+                     format!("{:?}",t.stat),
+                     format!("{:?}", t.parameter),
                      t.value(&data),
                      t.strength.factor,
                      t.strength.exponent,

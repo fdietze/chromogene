@@ -10,17 +10,23 @@ use colorscheme::ColorScheme;
 pub struct ColorSchemeProblemDescription {
     pub free_color_count: usize,
     pub fixed_colors: Vec<Lab>,
-    pub fitness_targets: Vec<Target>,
+    pub fitness_targets: HashMap<(Stat, Parameter), Target>,
+}
+
+impl ColorSchemeProblemDescription {
+    pub fn set(&mut self, target: Target) {
+        self.fitness_targets.insert((target.stat, target.parameter), target);
+    }
 }
 
 impl ProblemDescription<ColorScheme, ColorSchemeProblemDescription> for ColorSchemeProblemDescription {
     fn calculate_fitness(&self, scheme: &ColorScheme) -> f32 {
         let data = scheme.fitness_data(&self);
-        self.fitness_targets.iter().map(|target| target.calculate(&data)).sum::<f32>()
+        self.fitness_targets.values().map(|target| target.calculate(&data)).sum::<f32>()
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum Parameter {
     Chroma,
     Luminance,
@@ -43,8 +49,7 @@ pub struct Target {
 pub enum TargetDirection {
     Maximize,
     Minimize,
-    MaximizeDifference(f32),
-    MinimizeDifference(f32),
+    Approximate(f32),
 }
 
 impl Target {
@@ -71,10 +76,7 @@ impl Target {
         match self.direction {
             TargetDirection::Maximize => self.strength.calculate(value),
             TargetDirection::Minimize => -self.strength.calculate(value),
-            TargetDirection::MaximizeDifference(against) => {
-                self.strength.calculate((against - value).abs())
-            }
-            TargetDirection::MinimizeDifference(against) => {
+            TargetDirection::Approximate(against) => {
                 -self.strength.calculate((against - value).abs())
             }
         }
@@ -94,7 +96,7 @@ impl Strength {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Stat {
     Mean,
     StdDev,
@@ -158,8 +160,7 @@ mod test {
         }
         assert_eq!(t(Maximize).calculate(&data), 144.0);
         assert_eq!(t(Minimize).calculate(&data), -144.0);
-        assert_eq!(t(MaximizeDifference(6.0)).calculate(&data), 36.0);
-        assert_eq!(t(MinimizeDifference(6.0)).calculate(&data), -36.0);
+        assert_eq!(t(Approximate(6.0)).calculate(&data), -36.0);
     }
 
 }
