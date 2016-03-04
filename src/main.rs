@@ -28,6 +28,8 @@ use fitness::Stat::*;
 use fitness::TargetDirection::*;
 use fitness::{Target, Strength};
 
+mod action;
+
 mod genetic;
 use genetic::{Population, Genotype, ProblemDescription};
 
@@ -43,61 +45,6 @@ use std::sync::mpsc::channel;
 use std::thread;
 use std::io;
 
-enum Change {
-    Target(Target),
-    FreeColorCount(usize),
-    FixedColors(Vec<Lab>),
-}
-
-fn line_to_target(line: &str) -> Result<Target, String> {
-    let mut line = line.trim().split(" ");
-    let direction = try!(line.next().ok_or("expected string").and_then(|string| {
-        match string {
-            "minimize" => Ok(Minimize),
-            "maximize" => Ok(Maximize),
-            "approximate" => {
-                line.next()
-                    .ok_or("expected string")
-                    .and_then(|s| s.parse().map_err(|_| "expected float"))
-                    .map(|f| Approximate(f))
-            }
-
-            _ => Err("expected minimize, maximize or approximate"),
-        }
-    }));
-
-    let stat = try!(line.next().ok_or("expected string").and_then(|string| {
-        match string {
-            "mean" => Ok(Mean),
-            "stddev" => Ok(StdDev),
-            "min" => Ok(Min),
-            "max" => Ok(Max),
-            _ => Err("expected mean, stddev, min or max"),
-        }
-    }));
-
-    let parameter = try!(line.next().ok_or("expected string").and_then(|string| {
-        match string {
-            "chroma" => Ok(Chroma),
-            "luminance" => Ok(Luminance),
-            "freedist" => Ok(FreeDistance),
-            "fixeddist" => Ok(FixedDistance),
-            _ => Err("expected chroma, luminance, freedist or fixeddist"),
-        }
-    }));
-
-    let factor = line.next().and_then(|s| s.parse().ok()).unwrap_or(1.0);
-
-    let exponent = line.next().and_then(|s| s.parse().ok()).unwrap_or(1);
-
-    Ok(Target::new(direction,
-                   stat,
-                   parameter,
-                   Strength {
-                       factor: factor,
-                       exponent: exponent,
-                   }))
-}
 
 fn main() {
     let mut descr = ColorSchemeProblemDescription {
@@ -105,6 +52,7 @@ fn main() {
         // fixed_colors: vec![srgb!(0, 43, 54), srgb!(253, 246, 227)],
         // fixed_colors: vec![srgb!(51, 51, 51)],
         fixed_colors: vec![srgb!(255, 255, 255)],
+        preset_colors: vec![],
         fitness_targets: HashMap::new(),
     };
 
@@ -140,15 +88,15 @@ fn main() {
 
         let mut latest: Option<ColorScheme> = None;
         for i in 0..generations {
-            if let Ok(line) = rx.try_recv() {
-                line_to_target(&line)
-                    .map(|target| {
-                        descr.set(target);
-                        p.problem_description = descr.clone();
-                        last_fitness_change = i;
-                    })
-                    .unwrap_or_else(|err| println!("{}", err));
-            };
+            // if let Ok(line) = rx.try_recv() {
+            //     line_to_target(&line)
+            //         .map(|target| {
+            //             descr.set(target);
+            //             p.problem_description = descr.clone();
+            //             last_fitness_change = i;
+            //         })
+            //         .unwrap_or_else(|err| println!("{}", err));
+            // };
 
             let heat = (1.0 - (i - last_fitness_change) as f32 / 200 as f32).powi(1).max(0.01);
             let stats = p.next_generation(heat, &mut rng);

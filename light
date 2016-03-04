@@ -1,0 +1,18 @@
+fg_color_count 6
+preset_fg_colors rgb(255, 118, 240) rgb(173, 233, 255)
+
+bg_colors rgb(255, 255, 255) rgb(51, 51, 51)
+    color_filters redshift deuter
+
+    bg_fg_distance min approximate 40
+    bg_fg_distance stddev minimize
+
+    intra_fg_distance min approximate 30
+    intra_fg_distance mean approximate 40 factor 10
+    intra_fg_distance stddev minimize
+
+    chroma mean approximate 80
+    chroma stddev minimize exponent 2
+    luminance stddev minimize exponent 2
+
+    remove intra_fg_distance min

@@ -9,6 +9,7 @@ use colorscheme::ColorScheme;
 #[derive(Clone)]
 pub struct ColorSchemeProblemDescription {
     pub free_color_count: usize,
+    pub preset_colors: Vec<Lab>,
     pub fixed_colors: Vec<Lab>,
     pub fitness_targets: HashMap<(Stat, Parameter), Target>,
 }
@@ -37,7 +38,7 @@ pub enum Parameter {
 pub type FitnessData = HashMap<Parameter, StatValues>;
 
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct Target {
     pub direction: TargetDirection,
     pub stat: Stat,
@@ -45,7 +46,7 @@ pub struct Target {
     pub strength: Strength,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum TargetDirection {
     Maximize,
     Minimize,
@@ -77,14 +78,14 @@ impl Target {
             TargetDirection::Maximize => self.strength.calculate(value),
             TargetDirection::Minimize => -self.strength.calculate(value),
             TargetDirection::Approximate(against) => {
-                -self.strength.calculate((against - value).abs())
+                -self.strength.calculate((against as f32 - value).abs())
             }
         }
 
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct Strength {
     pub factor: f32,
     pub exponent: i32,
