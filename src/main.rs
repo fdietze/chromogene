@@ -31,6 +31,8 @@ use fitness::{Target, Strength};
 mod genetic;
 use genetic::{Population, Genotype, ProblemDescription};
 
+mod filter;
+
 #[macro_use]
 mod color;
 #[allow(unused_imports)]

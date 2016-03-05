@@ -2,14 +2,15 @@ use palette::{Lab, Rgb};
 use palette::pixel::Srgb;
 use palette::Limited;
 
-pub fn adjust_color_space(col: &Lab) -> Lab {
-    clamp_to_rgb(col)
-}
+use filter::*;
 
-fn clamp_to_rgb(col: &Lab) -> Lab {
+pub fn adjust_color_space(col: &Lab) -> Lab {
+    let f = deutan();
     let mut rgb: Rgb = (*col).into();
     rgb.clamp_self();
-    rgb.into()
+
+    let transformed = f.transform(rgb);
+    transformed.into()
 }
 
 pub fn distance(col1: &Lab, col2: &Lab) -> f32 {
