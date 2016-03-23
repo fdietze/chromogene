@@ -1,0 +1,8 @@
+maximize min freedist 20 1
+maximize mean freedist
+maximize min fixeddist
+minimize stddev freedist
+minimize stddev chroma 1 2
+minimize stddev luminance 1 2
+approximate 60 mean luminance
+approximate 80 mean chroma
