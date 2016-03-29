@@ -28,11 +28,30 @@ pub fn euclidean_distance(a: &Lab, b: &Lab) -> f32 {
 macro_rules! srgb {
     ( $r:expr,$g:expr, $b:expr ) => {
         {
-    Srgb::new($r as f32 / 255.0, $g as f32 / 255.0, $b as f32 / 255.0)
-        .to_linear()
-        .into()
+            Srgb::new($r as f32 / 255.0, $g as f32 / 255.0, $b as f32 / 255.0)
+                .to_linear()
+                .into()
         }
     };
+}
+
+pub fn hex(s: &str) -> Lab {
+    let default = Lab::new(0.0, 0.5, 0.5);
+    let s = s.trim_left_matches('#');
+    if s.len() != 6 {
+        return default;
+    }
+    let c = u32::from_str_radix(s, 16);
+    if let Some(c) = c.ok() {
+        let r = c >> 16;
+        let g = (c & 0x0000FF00) >> 8;
+        let b = c & 0xFF;
+        return srgb!(r, g, b);
+    } else {
+        return default;
+    };
+
+    default
 }
 
 pub fn term_bgcolor(color: Srgb, text: &str) -> String {
@@ -198,6 +217,21 @@ pub fn ciede2000(lab1: &Lab, lab2: &Lab) -> f32 {
 mod test {
     use super::*;
     use palette::Lab;
+
+    #[test]
+    fn hex_6_white() {
+        assert_eq!(hex("FFFFFF"), Lab::new(1.0, 0.000040978193, -0.00008139759))
+    }
+
+    #[test]
+    fn hex_7_black() {
+        assert_eq!(hex("#000000"), Lab::new(0.0, 0.0, 0.0))
+    }
+
+    #[test]
+    fn hex_7_green() {
+        assert_eq!(hex("#49D658"), Lab::new(0.7620054, -0.48857042, 0.39369407))
+    }
 
     fn ciede2000_case(l1: f32, a1: f32, b1: f32, l2: f32, a2: f32, b2: f32, de: f32) {
         let lab1 = Lab::new(l1 / 100.0, a1 / 128.0, b1 / 128.0);

@@ -1,10 +1,13 @@
 use palette::{Lab, Lch, Rgb};
+use palette::pixel::Srgb;
+use palette::Limited;
 use fitness::{ColorSchemeProblemDescription, FitnessData, StatValues};
 use fitness::Parameter::*;
 use color::*;
 use genetic::Genotype;
 use rand::Rng;
 use rand::distributions::{Normal, IndependentSample};
+use stats::{stddev, mean};
 
 #[derive(Debug, Clone, Default)]
 pub struct ColorScheme {
@@ -13,11 +16,34 @@ pub struct ColorScheme {
 }
 
 impl ColorScheme {
-    pub fn preview(&self, descr: &ColorSchemeProblemDescription) {
-        for color in descr.fixed_colors.iter() {
+    pub fn new(colors: Vec<Lab>) -> ColorScheme {
+        ColorScheme {
+            free_colors: colors,
+            fitness: 0.0,
+        }
+    }
+
+    pub fn print(&self) {
+        for color in self.free_colors.iter() {
             print_color(color);
         }
-        println!("");
+    }
+
+    pub fn print_hex(&self) {
+        for &color in self.free_colors.iter() {
+            let mut rgb: Rgb = color.into();
+            rgb.clamp_self();
+            let color = Srgb::from_linear(rgb);
+            println!("{}",
+                     term_fgcolor(color,
+                                  &format!("#{:02X}{:02X}{:02X}",
+                                           (color.red * 255.0) as u32,
+                                           (color.green * 255.0) as u32,
+                                           (color.blue * 255.0) as u32)));
+        }
+    }
+
+    pub fn print_sorted(&self) {
         let mut sorted = self.free_colors.clone();
         sorted.sort_by_key(|&col| {
             let lch: Lch = col.into();
@@ -26,6 +52,14 @@ impl ColorScheme {
         for color in sorted.iter() {
             print_color(color);
         }
+
+    }
+    pub fn preview(&self, descr: &ColorSchemeProblemDescription) {
+        for color in descr.fixed_colors.iter() {
+            print_color(color);
+        }
+        println!("");
+        self.print_sorted();
 
         println!("");
         for bg in descr.fixed_colors.iter() {
@@ -59,6 +93,26 @@ impl ColorScheme {
         //     println!("");
         // }
         // println!("");
+    }
+
+    pub fn equalize_luminance(&mut self) {
+        let m = mean(self.free_colors.iter().map(|&col| col.l));
+        for color in self.free_colors.iter_mut() {
+            color.l = m as f32;
+        }
+    }
+
+    pub fn equalize_chroma(&mut self) {
+        let m = mean(self.free_colors.iter().map(|&col| {
+            let lch: Lch = col.into();
+            lch.chroma
+        }));
+        for color in self.free_colors.iter_mut() {
+            let mut lch: Lch = color.clone().into();
+            lch.chroma = m as f32;
+            let mut lab: Lab = lch.into();
+            *color = lab;
+        }
     }
 
     pub fn fitness_data(&self, descr: &ColorSchemeProblemDescription) -> FitnessData {
@@ -139,14 +193,14 @@ impl ColorScheme {
         let data = self.fitness_data(&descr);
         for t in descr.fitness_targets.values() {
             println!("{: <23} {: <6} {: <13} ( {:8.3} *{})^{} = {:11.3}",
-                     format!("{:?}",t.direction),
-                     format!("{:?}",t.stat),
-                     format!("{:?}", t.parameter),
-                     t.value(&data),
-                     t.strength.factor,
-                     t.strength.exponent,
-                     t.calculate(&data),
-                     );
+            format!("{:?}",t.direction),
+            format!("{:?}",t.stat),
+            format!("{:?}", t.parameter),
+            t.value(&data),
+            t.strength.factor,
+            t.strength.exponent,
+            t.calculate(&data),
+            );
         }
     }
 }

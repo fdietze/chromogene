@@ -100,83 +100,116 @@ fn line_to_target(line: &str) -> Result<Target, String> {
 }
 
 fn main() {
+    let mut colorscheme = ColorScheme::new(vec!(
+    hex("#2ECC71"),
+    hex("#F1C40F"),
+    hex("#3498DB"),
+    hex("#9266D1"),
+    hex("#1ABC9C"),
+    hex("#E74C3C"),
+    ));
     let mut descr = ColorSchemeProblemDescription {
         free_color_count: 6,
-        // fixed_colors: vec![srgb!(0, 43, 54), srgb!(253, 246, 227)],
-        // fixed_colors: vec![srgb!(51, 51, 51)],
-        fixed_colors: vec![srgb!(255, 255, 255)],
+        fixed_colors: vec![hex("#2C3E50")],
         fitness_targets: HashMap::new(),
     };
 
-    let (tx, rx) = channel();
-    let stdin_thread = thread::spawn(move || {
-        loop {
-            let mut input = String::new();
-
-            match io::stdin().read_line(&mut input) {
-                Ok(_) => tx.send(input).unwrap(),
-                Err(_) => break,
-            }
-        }
-    });
+    descr.set(Target::new(Maximize, Mean, Chroma, Strength::default()));
+    descr.set(Target::new(Maximize, StdDev, Chroma, Strength::default()));
+    descr.set(Target::new(Maximize, Mean, Luminance, Strength::default()));
+    descr.set(Target::new(Maximize, StdDev, Luminance, Strength::default()));
 
 
-    let generations = 50000000;
-    let population_size = 1000;
-    let runs = 1;
+    colorscheme.preview(&descr);
+    colorscheme.print_fitness(&descr);
 
-    // benchmark parameters:
-    // let generations = 500;
-    // let population_size = 50;
-    // let runs = 20;
+    colorscheme.equalize_luminance();
+    colorscheme.preview(&descr);
 
-    let mut run_stats = stats::OnlineStats::new();
-    let mut run_minmax = stats::MinMax::new();
-    let mut last_fitness_change = 0;
-    for run in 0..runs {
-        let mut rng = thread_rng();
-        let mut p: Population<ColorScheme, ColorSchemeProblemDescription> =
-            Population::new(population_size, descr.clone(), &mut rng);
+    colorscheme.equalize_chroma();
+    colorscheme.preview(&descr);
+    colorscheme.print_hex();
 
-        let mut latest: Option<ColorScheme> = None;
-        for i in 0..generations {
-            if let Ok(line) = rx.try_recv() {
-                line_to_target(&line)
-                    .map(|target| {
-                        descr.set(target);
-                        p.problem_description = descr.clone();
-                        last_fitness_change = i;
-                    })
-                    .unwrap_or_else(|err| println!("{}", err));
-            };
 
-            let heat = (1.0 - (i - last_fitness_change) as f32 / 200 as f32).powi(1).max(0.01);
-            let stats = p.next_generation(heat, &mut rng);
 
-            // if generations < 100 || i % (generations / 100) == 0 {
-            stats.0.preview(&descr);
-            stats.0.print_fitness(&descr);
-            println!("{:04}: best fitness: {:11.5}, avg: {:6.2}, sd: {:6.2}  heat: {:5.3}\n",
-                     i,
-                     stats.0.get_fitness(),
-                     stats.1,
-                     stats.2,
-                     heat);
-            // }
 
-            latest = Some(stats.0);
-        }
-        let best = latest.unwrap();
-        best.preview(&descr);
-        run_stats.add(best.get_fitness());
-        run_minmax.add(best.get_fitness());
-        println!("{:8.3}", best.get_fitness());
-        best.print_fitness(&descr);
-    }
-    println!("\nbest: {:8.3}\navg:  {:8.3}\nsd:   {:8.3}",
-             run_minmax.max().unwrap(),
-             run_stats.mean(),
-             run_stats.stddev());
+    // let mut descr = ColorSchemeProblemDescription {
+    //     free_color_count: 6,
+    //     // fixed_colors: vec![srgb!(0, 43, 54), srgb!(253, 246, 227)],
+    //     // fixed_colors: vec![srgb!(51, 51, 51)],
+    //     fixed_colors: vec![srgb!(255, 255, 255)],
+    //     fitness_targets: HashMap::new(),
+    // };
 
-    stdin_thread.join().unwrap();
+    // let (tx, rx) = channel();
+    // let stdin_thread = thread::spawn(move || {
+    //     loop {
+    //         let mut input = String::new();
+
+    //         match io::stdin().read_line(&mut input) {
+    //             Ok(_) => tx.send(input).unwrap(),
+    //             Err(_) => break,
+    //         }
+    //     }
+    // });
+
+
+    // let generations = 50000000;
+    // let population_size = 1000;
+    // let runs = 1;
+
+    // // benchmark parameters:
+    // // let generations = 500;
+    // // let population_size = 50;
+    // // let runs = 20;
+
+    // let mut run_stats = stats::OnlineStats::new();
+    // let mut run_minmax = stats::MinMax::new();
+    // let mut last_fitness_change = 0;
+    // for run in 0..runs {
+    //     let mut rng = thread_rng();
+    //     let mut p: Population<ColorScheme, ColorSchemeProblemDescription> =
+    //         Population::new(population_size, descr.clone(), &mut rng);
+
+    //     let mut latest: Option<ColorScheme> = None;
+    //     for i in 0..generations {
+    //         if let Ok(line) = rx.try_recv() {
+    //             line_to_target(&line)
+    //                 .map(|target| {
+    //                     descr.set(target);
+    //                     p.problem_description = descr.clone();
+    //                     last_fitness_change = i;
+    //                 })
+    //                 .unwrap_or_else(|err| println!("{}", err));
+    //         };
+
+    //         let heat = (1.0 - (i - last_fitness_change) as f32 / 200 as f32).powi(1).max(0.01);
+    //         let stats = p.next_generation(heat, &mut rng);
+
+    //         // if generations < 100 || i % (generations / 100) == 0 {
+    //         stats.0.preview(&descr);
+    //         stats.0.print_fitness(&descr);
+    //         println!("{:04}: best fitness: {:11.5}, avg: {:6.2}, sd: {:6.2}  heat: {:5.3}\n",
+    //                  i,
+    //                  stats.0.get_fitness(),
+    //                  stats.1,
+    //                  stats.2,
+    //                  heat);
+    //         // }
+
+    //         latest = Some(stats.0);
+    //     }
+    //     let best = latest.unwrap();
+    //     best.preview(&descr);
+    //     run_stats.add(best.get_fitness());
+    //     run_minmax.add(best.get_fitness());
+    //     println!("{:8.3}", best.get_fitness());
+    //     best.print_fitness(&descr);
+    // }
+    // println!("\nbest: {:8.3}\navg:  {:8.3}\nsd:   {:8.3}",
+    //          run_minmax.max().unwrap(),
+    //          run_stats.mean(),
+    //          run_stats.stddev());
+
+    // stdin_thread.join().unwrap();
 }

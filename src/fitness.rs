@@ -94,6 +94,13 @@ impl Strength {
     fn calculate(&self, value: f32) -> f32 {
         (self.factor * value).powi(self.exponent)
     }
+
+    pub fn default() -> Strength {
+        Strength {
+            factor: 1.0,
+            exponent: 1,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
