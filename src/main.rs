@@ -102,9 +102,9 @@ fn line_to_target(line: &str) -> Result<Target, String> {
 fn main() {
     let mut descr = ColorSchemeProblemDescription {
         free_color_count: 6,
-        // fixed_colors: vec![srgb!(0, 43, 54), srgb!(253, 246, 227)],
+        fixed_colors: vec![srgb!(0, 43, 54), srgb!(253, 246, 227)],
         // fixed_colors: vec![srgb!(51, 51, 51)],
-        fixed_colors: vec![srgb!(255, 255, 255)],
+        // fixed_colors: vec![srgb!(255, 255, 255)],
         fitness_targets: HashMap::new(),
     };
 

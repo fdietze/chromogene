@@ -1,0 +1,4 @@
+maximize min fixeddist
+approximate 40 min freedist
+minimize stddev luminance 1 2
+minimize stddev chroma 1 2
