@@ -110,13 +110,10 @@ fn main() {
 
     let (tx, rx) = channel();
     let stdin_thread = thread::spawn(move || {
-        loop {
-            let mut input = String::new();
-
-            match io::stdin().read_line(&mut input) {
-                Ok(_) => tx.send(input).unwrap(),
-                Err(_) => break,
-            }
+        let mut input = String::new();
+        while io::stdin().read_line(&mut input).unwrap() > 0 {
+            tx.send(input.clone()).unwrap();
+            input.clear();
         }
     });
 
